@@ -56,7 +56,7 @@ def Wigner_PMS_func(GCS, time_index, r_tilde_array):
     - Matrix of the Wigner function of diagonal 
     """
 
-    W_PMS = np.zeros((len(GCS.POVM_array[0]), len(r_tilde_array), len(r_tilde_array)), dtype =np.complex64)
+    W_PMS = np.zeros((len(GCS.POVM_array), len(r_tilde_array), len(r_tilde_array)), dtype =np.complex64)
 
     sigma_JK = GCS.sigma_JK_t[time_index]
     r_JK = GCS.r_JK_t[time_index] 
@@ -73,10 +73,10 @@ def Wigner_PMS_func(GCS, time_index, r_tilde_array):
                     for a in range(len(W_PMS)):
                         W_PMS[a,m,n] += GCS.POVM_array[a,i,j]*(2**n_modes)*rho_q[i,j]/(np.pi**n_modes * np.sqrt(det_sigma))*np.exp(-np.transpose(r_tilde_array[m,n] - r_JK[i,j])@sigma_inv@(r_tilde_array[m,n] - r_JK[i,j]))
     for a in range(len(W_PMS)):
-        if GCS.prob_t[a,time_index] == 0:
+        if GCS.prob_t[a,time_index] == 0.0:
             W_PMS[a] = np.zeros((len(r_tilde_array), len(r_tilde_array)))
         else:
-            W_PMS[a] = W_PMS[a]/GCS.prob_t[a,time_index]
+            W_PMS[a] = W_PMS[a]*GCS.prob_t[a,time_index]
     return np.real(W_PMS)
 
 def Wigner_Sum_Diagonal(GCS, time_index, r_tilde_array):
