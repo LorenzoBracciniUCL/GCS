@@ -1,5 +1,5 @@
-# QCAT 
-## Superposition of Quantum Gaussian Processes
+# GCS 
+## Superposition of Quantum Gaussian Processes: Gaussian Cat States
 ### Main Reference: [arXiv:2510.01156](https://arxiv.org/abs/2510.01156)
 
 This methodology generalized the covariance matrix formalism of Quantum Optics for n modes to inculde interactions with N qubits, resulting in superpositions of quantum gaussian processes, i.e. dynamics and measurements of Gaussian-branched Cat States (qubits-modes entangled state). 
