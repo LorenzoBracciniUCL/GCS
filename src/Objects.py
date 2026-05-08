@@ -426,12 +426,12 @@ class Quantum_State:
     def Plot_Phase_Space_First_QRDM(self, leged_lables, array_pi,save):
         Plots_Functions.Plot_Phase_Space_First_QRDM_Func(self, leged_lables, array_pi ,save)
 
-    def Plot_Wigner_Function_Diag(self, steps, time_index, mode_number, sigma_para, array_tick, save):
+    def Plot_Wigner_Function_Diag(self, steps, time_index, mode_number, sigma_para, array_tick, title, save):
             
         r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
         self.wigner_diag = Wigner_Functions.Wigner_Sum_Diagonal(self, time_index, r_tilde_array)
         bar_limits = [0, np.max(self.wigner_diag)]
-        fig = Plots_Functions.Plot_Wigner_Diag(self.wigner_diag,  x_array, p_array, bar_limits, array_tick, save) 
+        fig = Plots_Functions.Plot_Wigner_Diag(self.wigner_diag,  x_array, p_array, bar_limits, array_tick, title,save) 
         return
 
     def Plot_Wigner_4_Times(self, steps, time_index_array, mode_number, sigma_para, array_tick, save):
@@ -445,46 +445,93 @@ class Quantum_State:
         fig = Plots_Functions.Plot_Wigner_4_Times(wigner_array, x_array, p_array, save)
         return
 
-    def Plot_Wigner_Function_PMS(self, steps, time_index, mode_number, sigma_para, array_tick, save):
-        r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
+    def Plot_Wigner_Function_PMS(self, steps, time_index, mode_number, sigma_para, array_tick, title, save):
+        r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number,steps)
         self.wigner_PMS = Wigner_Functions.Wigner_PMS_func(self, time_index, r_tilde_array)
 
         bar_limits = [-np.max(self.wigner_PMS), np.max(self.wigner_PMS)]
-        fig = Plots_Functions.Plot_Wigner_Fringes(self.wigner_PMS,  x_array, p_array, bar_limits,array_tick, save) 
+        fig = Plots_Functions.Plot_Wigner_Fringes(self.wigner_PMS,  x_array, p_array, bar_limits,array_tick,title, save) 
         return
     
-    def Plot_Wigner_Function_Gauss(self, steps, time_index, mode_number, sigma_para, array_tick, save):
+    def Plot_Wigner_Function_Gauss(self, steps, time_index, mode_number, sigma_para, array_tick, title, save):
             
         r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
         self.wigner_gauss = Wigner_Functions.Wigner_Gaussian(self, time_index, r_tilde_array)
         bar_limits = [0, np.max(self.wigner_gauss)]
-        fig = Plots_Functions.Plot_Wigner_Diag(self.wigner_gauss,  x_array, p_array, bar_limits, array_tick, save) 
+        fig = Plots_Functions.Plot_Wigner_Diag(self.wigner_gauss,  x_array, p_array, bar_limits, array_tick,title, save)
         return
 
-################################## Animation ################################## 
+    def Plot_Trajectories_Single(self, z_comp=0, title="Dynamics of the first moments",
+                                 legend_handles=None, color_map=None, sym_lim=None,
+                                 figsize=(10, 10), elev=22, azim=-55):
+        return Plots_Functions.Plot_Trajectories_Single(
+            self.r_JK_t, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
 
-    def Animate_Wigner_Function_Diag(self, steps, mode_number, sigma_para, array_tick, n_frames, save):
+    def Plot_Vectors_Single(self, t_idx, z_comp=0, title="First moments",
+                            legend_handles=None, color_map=None, sym_lim=None,
+                            figsize=(10, 10), elev=22, azim=-55):
+        return Plots_Functions.Plot_Vectors_Single(
+            self.r_JK_t, t_idx, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
+
+    def Plot_Vectors_Ellipsoids_Single(self, t_idx, z_comp=0,
+                                       title="First moments with uncertainty",
+                                       legend_handles=None, color_map=None, sym_lim=None,
+                                       figsize=(10, 10), elev=22, azim=-55):
+        return Plots_Functions.Plot_Vectors_Ellipsoids_Single(
+            self.r_JK_t, self.sigma_JK_t, t_idx, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
+
+    def Animate_Vectors_Single(self, z_comp=0,
+                               title="First moments",
+                               legend_handles=None, color_map=None, sym_lim=None,
+                               figsize=(10, 10), elev=22, azim=-55,
+                               n_frames=None, interval=50, save=False):
+        return Plots_Functions.Animate_Vectors_Single(
+            self.r_JK_t, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim,
+            n_frames=n_frames, interval=interval, save=save)
+
+    def Animate_Vectors_Ellipsoids_Single(self, z_comp=0,
+                                          title="First moments with uncertainty",
+                                          legend_handles=None, color_map=None, sym_lim=None,
+                                          figsize=(10, 10), elev=22, azim=-55,
+                                          n_frames=None, interval=50, save=False):
+        return Plots_Functions.Animate_Vectors_Ellipsoids_Single(
+            self.r_JK_t, self.sigma_JK_t, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim,
+            n_frames=n_frames, interval=interval, save=save)
+
+################################## Animation ##################################
+
+    def Animate_Wigner_Function_Diag(self, steps, mode_number, sigma_para, array_tick, n_frames, title,save):
             
         r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
         self.wigner_diag_t = Wigner_Functions.Wigner_t_Sum_Diag(self, r_tilde_array)
         bar_limits = [0, np.max(self.wigner_diag_t)]
-        fig = Plots_Functions.Animate_Diagonal(self.wigner_diag_t,  x_array, p_array, bar_limits, array_tick, n_frames, save)
+        fig = Plots_Functions.Animate_Diagonal(self.wigner_diag_t,  x_array, p_array, bar_limits, array_tick, n_frames,title ,save)
         return
 
-    def Animate_Wigner_Function_PMS(self, steps, mode_number, sigma_para, array_tick, n_frames, save):
+    def Animate_Wigner_Function_PMS(self, steps, mode_number, sigma_para, array_tick, n_frames,title, save):
             
         r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
         self.wigner_PMS_t = Wigner_Functions.Wigner_t_PMS(self, r_tilde_array)
         bar_limits = [-np.max(self.wigner_PMS_t), np.max(self.wigner_PMS_t)]
         print(np.shape(self.wigner_PMS_t))
-        fig = Plots_Functions.Animate_Fringes(self.wigner_PMS_t,  x_array, p_array, bar_limits, array_tick, n_frames, save)
+        fig = Plots_Functions.Animate_Fringes(self.wigner_PMS_t,  x_array, p_array, bar_limits, array_tick, n_frames, title, save)
         return
     
-    def Animate_Gaussian(self, steps, mode_number, sigma_para, array_tick, n_frames, save):
+    def Animate_Gaussian(self, steps, mode_number, sigma_para, array_tick, n_frames, title, save):
             
         r_tilde_array, x_array, p_array, XX, PP = Wigner_Functions.Create_r_tilde_array(self,sigma_para, mode_number, steps)
         self.wigner_gauss_t = Wigner_Functions.Wigner_t_Gauss(self, r_tilde_array)
         bar_limits = [0, np.max(self.wigner_gauss_t)]
-        fig = Plots_Functions.Animate_Diagonal(self.wigner_gauss_t,  x_array, p_array, bar_limits, array_tick, n_frames, save)
+        fig = Plots_Functions.Animate_Diagonal(self.wigner_gauss_t,  x_array, p_array, bar_limits, array_tick, n_frames, title, save)
         return
         

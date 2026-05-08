@@ -10,7 +10,10 @@ from matplotlib import cm
 from matplotlib import rcParams
 from matplotlib import colors
 from fractions import Fraction as Fraction
-import matplotlib.animation as animation 
+import matplotlib.animation as animation
+import matplotlib.lines as mlines
+from mpl_toolkits.mplot3d import Axes3D           # noqa: F401
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def format_latex_numbers(arr):
     formatted = []
@@ -155,7 +158,7 @@ def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
         plt.savefig(save, bbox_inches='tight', transparent=True)
     return 
 
-def Plot_Wigner_Diag(wigner,  x_array, p_array, bar_limits, array_tick, save):
+def Plot_Wigner_Diag(wigner,  x_array, p_array, bar_limits, array_tick, title, save):
     
     rcParams['mathtext.fontset'] = 'cm'
     rcParams['font.family'] = 'STIXGeneral'
@@ -164,15 +167,13 @@ def Plot_Wigner_Diag(wigner,  x_array, p_array, bar_limits, array_tick, save):
     fig.set_tight_layout(True)
 
     lables_tick = format_latex_numbers(array_tick)
-
-    axes.set_title(r'Wigner Function $ W(\bar{r})$', fontsize=13)
     
     
     axes.axvline(x=0, color='black',linewidth=0.5, alpha=0.4)
     axes.axhline(y=0, color='black',linewidth=0.5, alpha=0.4)
 
-    axes.set_ylabel(r'Momentum ($p = P/p_0$)',labelpad=2, fontsize=11)
-    axes.set_xlabel(r'Position ($x = X/x_0$)',labelpad=2, fontsize=11)
+    axes.set_ylabel(r'Momentum, $p$',labelpad=2, fontsize=11)
+    axes.set_xlabel(r'Position, $x$',labelpad=2, fontsize=11)
 
     axes.set_ylim(-np.max(x_array), np.max(x_array))
     axes.set_xlim(-np.max(x_array), np.max(x_array))
@@ -180,6 +181,7 @@ def Plot_Wigner_Diag(wigner,  x_array, p_array, bar_limits, array_tick, save):
     axes.set_xticklabels(lables_tick)
     axes.set_yticks(array_tick)
     axes.set_yticklabels(lables_tick)
+
 
 
 
@@ -204,6 +206,12 @@ def Plot_Wigner_Diag(wigner,  x_array, p_array, bar_limits, array_tick, save):
     bar.set_ticks([bar_limits[0],0,bar_limits[1]])
     bar.set_ticklabels(['{:.1f}'.format(x) for x in bar.get_ticks()])
     bar.set_label(r'$ W(\tilde{r})$',fontsize=10,labelpad=-5, y = 0.4,ha='right', rotation=-90)
+    
+    if title == False:
+        axes.set_title(r'Wigner Function $ W(\bar{r})$', fontsize=13)
+    else:
+        axes.set_title(title, fontsize=13)
+        
     
     if save == False:
         pass
@@ -281,7 +289,7 @@ def Plot_Wigner_4_Times(wigner_array, x_array, p_array, save):
         plt.savefig(save, bbox_inches='tight')
         return
 
-def Plot_Wigner_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, save):
+def Plot_Wigner_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick,title, save):
 
     
     rcParams['mathtext.fontset'] = 'cm'
@@ -331,7 +339,7 @@ def Plot_Wigner_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, s
         axes[i].axvline(x=0, color='black',linewidth=0.5, alpha=0.4)
         axes[i].axhline(y=0, color='black',linewidth=0.5, alpha=0.4)
 
-        axes[i].set_xlabel(r'Position ($x = X/x_0$)',labelpad=2, fontsize=11)
+        axes[i].set_xlabel(r'Position ($x$)',labelpad=2, fontsize=11)
 
 
         for axis in ['top','bottom','left','right']:
@@ -342,9 +350,13 @@ def Plot_Wigner_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, s
 
     axes[0].set_title(r'$ W_+(\tilde{r})$')
     axes[1].set_title(r'$ W_-(\tilde{r})$')
-    axes[0].set_ylabel(r'Momentum ($p = P/p_0$)',labelpad=0, fontsize=11)
+    axes[0].set_ylabel(r'Momentum ($p$)',labelpad=0, fontsize=11)
 
-    fig.suptitle('(b) Wigner Functions of Post-Measurement States', y=0.85)
+
+    if title == False:
+        fig.suptitle('(b) Wigner Functions of Post-Measurement States', y=0.85)
+    else:
+        fig.suptitle(title, y=0.85)
     
     if save == False:
         pass
@@ -352,9 +364,9 @@ def Plot_Wigner_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, s
         plt.savefig(save, bbox_inches='tight', transparent=True)
     return fig, im1, im2
 
-def Animate_Diagonal(wigner_t,  x_array, p_array, bar_limits, array_tick, n_frames, save):
+def Animate_Diagonal(wigner_t,  x_array, p_array, bar_limits, array_tick, n_frames, title, save):
 
-    fig, im = Plot_Wigner_Diag(wigner_t[0],  x_array, p_array, bar_limits, array_tick, False)
+    fig, im = Plot_Wigner_Diag(wigner_t[0],  x_array, p_array, bar_limits, array_tick,title, False)
 
     def update(frame):
         """Update function for the animation."""
@@ -373,9 +385,9 @@ def Animate_Diagonal(wigner_t,  x_array, p_array, bar_limits, array_tick, n_fram
         ani.save(filename=save,writer="pillow")
     return
 
-def Animate_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, n_frames, save):
+def Animate_Fringes(wigner_PMS,  x_array, p_array, bar_limits, array_tick, n_frames,title, save):
 
-    fig, im1,im2 = Plot_Wigner_Fringes(wigner_PMS[0],  x_array, p_array, bar_limits, array_tick, False)
+    fig, im1,im2 = Plot_Wigner_Fringes(wigner_PMS[0],  x_array, p_array, bar_limits, array_tick,title, False)
 
     def update(frame):
         """Update function for the animation."""
@@ -729,3 +741,447 @@ def set_up_figure(wigner_array, psi_x, psi_p, delta_x, x_array, p_array, Nphonon
     bar.set_label(r'$ W(r,t)$',fontsize=10,labelpad=1, y=0.42, ha='right', rotation=-90)
     
     return fig, im, line_x, line_p
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  3-D Phase-Space Plots  (Plot_Trajectories_Single, Plot_Vectors_Single,
+#                          Plot_Vectors_Ellipsoids_Single)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── default color palettes ────────────────────────────────────────────────────
+_COLORS_BLUE_3D  = ['lightskyblue', 'cornflowerblue', 'royalblue',  'blue',   'darkblue']
+_COLORS_RED_3D   = ['salmon',       'tomato',          'orangered',  'red',    'darkred']
+
+_INDEX_MAP_3D = [
+    ((0, 0), r"$r^{\mathrm{on}}_{+}$",  'real+'),
+    ((1, 1), r"$r^{\mathrm{on}}_{-}$",  'real-'),
+    ((0, 1), r"$r^{\mathrm{off}}$",      'off'),
+    ((1, 0), r"$(r^{\mathrm{off}})^*$",  'off*'),
+]
+
+_DEFAULT_COLOR_MAP_3D = {
+    'real+': _COLORS_BLUE_3D[1],
+    'real-': _COLORS_BLUE_3D[3],
+    'off':   _COLORS_RED_3D[1],
+    'off*':  _COLORS_RED_3D[3],
+}
+
+# Pre-computed unit-sphere grids (module-level, reused for every ellipsoid)
+_N_LON_3D, _N_LAT_3D = 24, 12
+_u_sph_3d = np.linspace(0, 2*np.pi, 80)
+_v_sph_3d = np.linspace(0,   np.pi, 80)
+_LAT_V_3D = np.linspace(0, np.pi, _N_LAT_3D + 2)[1:-1]   # exclude poles
+_LON_U_3D = np.linspace(0, 2*np.pi, _N_LON_3D, endpoint=False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PRIVATE DRAWING PRIMITIVES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color):
+    """Flat filled 2-D triangle arrowhead embedded in 3-D space."""
+    base = tip - direction * head_len
+    ref  = np.array([0., 0., 1.]) if abs(direction[2]) < 0.9 else np.array([1., 0., 0.])
+    perp = np.cross(direction, ref)
+    perp /= np.linalg.norm(perp)
+    v0, v1, v2 = tip, base + perp*(head_width/2), base - perp*(head_width/2)
+    ax.add_collection3d(Poly3DCollection([[v0, v1, v2]],
+                        facecolor=color, edgecolor=color,
+                        linewidth=0.5, zorder=15))
+
+
+def _draw_axis_arrow_3d(ax, neg_end, pos_end, label, tick_vals,
+                        lw=1.2, color='black', fontsize=13,
+                        label_offset=0.12, tick_size=0.06):
+    """Shaft + triangle head + tick marks + axis label for one coordinate axis."""
+    direction = pos_end - neg_end
+    total_len = np.linalg.norm(direction)
+    direction = direction / total_len
+    head_len  = total_len * 0.08
+    shaft_tip = pos_end - direction * head_len
+
+    ax.plot(*zip(neg_end, shaft_tip), color=color, linewidth=lw, zorder=10)
+    _triangle_arrowhead_3d(ax, pos_end, direction, head_len, head_len*0.7, color)
+
+    label_pos = pos_end + direction * label_offset
+    ax.text(*label_pos, label, color=color, fontsize=fontsize,
+            ha='center', va='center', zorder=11)
+
+    ref  = np.array([0., 0., 1.]) if abs(direction[2]) < 0.9 else np.array([1., 0., 0.])
+    perp = np.cross(direction, ref);  perp /= np.linalg.norm(perp)
+    for tv in tick_vals:
+        tc = direction * tv
+        ax.plot(*zip(tc - perp*tick_size, tc + perp*tick_size),
+                color=color, linewidth=0.8, zorder=10)
+        ax.text(*(tc + perp*(tick_size*6.0)), str(int(round(tv))),
+                color=color, fontsize=fontsize-2, ha='center', va='center', zorder=11)
+
+
+def _setup_axes_decoration_3d(ax, sym_lim, xlabel, ylabel, zlabel,
+                               fontsize=13, axis_extend=0.18):
+    """Turn off Matplotlib default decorations; draw custom cross-at-origin axes
+    with tick marks and grid lines on the z=0 plane.
+    """
+    ax.set_axis_off()
+    lo, hi = sym_lim
+    ticks       = np.arange(int(np.ceil(lo)), int(np.floor(hi)) + 1, dtype=float)
+    label_ticks = ticks[ticks != 0]
+    ext         = (hi - lo) * axis_extend
+
+    axes_def = [
+        (np.array([lo, 0., 0.]), np.array([hi+ext, 0., 0.]), xlabel),
+        (np.array([0., lo, 0.]), np.array([0., hi+ext, 0.]), ylabel),
+        (np.array([0., 0., lo]), np.array([0., 0., hi+ext]), zlabel),
+    ]
+    for neg_end, pos_end, lbl in axes_def:
+        _draw_axis_arrow_3d(ax, neg_end, pos_end, lbl, label_ticks,
+                            fontsize=fontsize, label_offset=0.10 + ext*0.3)
+
+    ax.set_xlim(lo, hi+ext)
+    ax.set_ylim(lo, hi+ext)
+    ax.set_zlim(lo, hi+ext)
+
+    for tv in label_ticks:
+        ax.plot([tv, tv], [lo, hi], [0, 0], color='0.65', lw=0.6, alpha=0.45, zorder=2)
+        ax.plot([lo, hi], [tv, tv], [0, 0], color='0.65', lw=0.6, alpha=0.45, zorder=2)
+
+
+def _safe_sqrt_3d(val, label=""):
+    """sqrt with clipping; warns if value was negative."""
+    if val < 0:
+        print(f"  Warning: negative value {val:.4g} under sqrt ({label}), clipped to 0.")
+    return np.sqrt(max(float(val), 0.0))
+
+
+def _draw_vector_3d(ax, tip, color, lw=1.8, head_frac=0.12):
+    """Draw a single arrow from the origin to tip: shaft + flat triangle head."""
+    tip    = np.asarray(tip, dtype=float)
+    origin = np.zeros(3)
+    mag    = np.linalg.norm(tip)
+    if mag < 1e-12:
+        return
+
+    direction  = tip / mag
+    head_len   = mag * head_frac
+    head_width = head_len * 0.7
+    shaft_tip  = tip - direction * head_len
+
+    ax.plot([origin[0], shaft_tip[0]],
+            [origin[1], shaft_tip[1]],
+            [origin[2], shaft_tip[2]],
+            color=color, linewidth=lw, zorder=10)
+
+    _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color)
+
+
+def _draw_ellipsoid_3d(ax, cx, cy, cz, ax_x, ax_y, ax_z, color,
+                       surf_alpha=0.18, line_alpha=0.25, lw=0.5):
+    """Draw an axis-aligned ellipsoid at (cx,cy,cz) with geodesic lines."""
+    U, V = np.meshgrid(np.linspace(0, 2*np.pi, 40),
+                       np.linspace(0,     np.pi, 20))
+    ax.plot_surface(cx + ax_x*np.cos(U)*np.sin(V),
+                    cy + ax_y*np.sin(U)*np.sin(V),
+                    cz + ax_z*np.cos(V),
+                    color=color, alpha=surf_alpha, linewidth=0, antialiased=True)
+
+    for v0 in _LAT_V_3D:
+        ax.plot(cx + ax_x*np.cos(_u_sph_3d)*np.sin(v0),
+                cy + ax_y*np.sin(_u_sph_3d)*np.sin(v0),
+                cz + ax_z*np.cos(v0)*np.ones_like(_u_sph_3d),
+                color=color, linewidth=lw, alpha=line_alpha)
+
+    for u0 in _LON_U_3D:
+        ax.plot(cx + ax_x*np.cos(u0)*np.sin(_v_sph_3d),
+                cy + ax_y*np.sin(u0)*np.sin(_v_sph_3d),
+                cz + ax_z*np.cos(_v_sph_3d),
+                color=color, linewidth=lw, alpha=line_alpha)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PRIVATE SCENE BUILDERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_scene_3d(sym_lim, z_comp=0, figsize=(10, 10), elev=22, azim=-55):
+    """Create a figure with a single 3-D axes, expanded to fill the canvas."""
+    fig = plt.figure(figsize=figsize)
+    ax  = fig.add_subplot(111, projection='3d')
+    ax.set_position([-0.05, -0.05, 1.10, 1.05])
+    ax.view_init(elev=elev, azim=azim)
+    return fig, ax
+
+
+def _finalise_3d(ax, fig, sym_lim, z_comp,
+                 title="", legend_handles=None,
+                 fontsize=13, FS_TITLE=15, FS_LEG=12):
+    """Must be called LAST: draws axis decorations, title, and legend."""
+    zlabel = r"$\mathrm{Im}[x]$" if z_comp == 0 else r"$\mathrm{Im}[p]$"
+    _setup_axes_decoration_3d(ax, sym_lim,
+                               xlabel=r"$\mathrm{Re}[x]$",
+                               ylabel=r"$\mathrm{Re}[p]$",
+                               zlabel=zlabel,
+                               fontsize=fontsize)
+
+    if title:
+        ax.set_title(title, fontsize=FS_TITLE, y=0.85)
+
+    if legend_handles is None:
+        handles, labels = ax.get_legend_handles_labels()
+        legend_handles  = handles
+    if legend_handles:
+        fig.legend(legend_handles, [h.get_label() for h in legend_handles],
+                   loc='lower center', ncol=4,
+                   fontsize=FS_LEG, framealpha=0.7,
+                   bbox_to_anchor=(0.5, 0.3))
+
+    fig.subplots_adjust(top=0.98, bottom=0.08)
+    return fig
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PUBLIC DRAWERS  (animation-friendly — figure-independent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def Draw_XY_Plane(ax, sym_lim):
+    """Draw the z=0 reference plane as a lightly shaded gray surface."""
+    lo, hi = sym_lim
+    xx, yy = np.meshgrid([lo, hi], [lo, hi])
+    ax.plot_surface(xx, yy, np.zeros_like(xx),
+                    color='gray', alpha=0.08,
+                    linewidth=0, antialiased=False, zorder=1)
+
+
+def Draw_Curves(ax, r_JK_t, z_comp, color_map=None):
+    """Draw trajectory curves from r_JK_t with directional arrowheads.
+
+    Parameters
+    ----------
+    ax        : Axes3D returned by _make_scene_3d
+    r_JK_t    : ndarray (T, 2, 2, 2, 1) complex
+    z_comp    : 0 -> Im[x] as z,  1 -> Im[p] as z
+    color_map : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    """
+    if color_map is None:
+        color_map = _DEFAULT_COLOR_MAP_3D
+
+    T = r_JK_t.shape[0]
+
+    for (j, k), label, role in _INDEX_MAP_3D:
+        color = color_map[role]
+        vec   = r_JK_t[:, j, k, :, 0]
+        rx    = vec[:, 0].real
+        rp    = vec[:, 1].real
+        z     = vec[:, z_comp].imag
+
+        ax.plot(rx, rp, z, color=color, linewidth=1.4, alpha=0.6, label=label)
+
+        for frac in (1/3, 2/3):
+            i = max(1, min(int(round(frac * (T - 1))), T - 2))
+            d = np.array([rx[i]-rx[i-1], rp[i]-rp[i-1], z[i]-z[i-1]])
+            norm = np.linalg.norm(d)
+            if norm < 1e-12:
+                continue
+            _triangle_arrowhead_3d(ax, np.array([rx[i], rp[i], z[i]]),
+                                   d/norm, head_len=0.3, head_width=0.3,
+                                   color=color)
+
+
+def Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=None):
+    """Draw first-moment vectors as arrows from origin at time t_idx.
+
+    Parameters
+    ----------
+    ax        : Axes3D returned by _make_scene_3d
+    r_JK_t    : ndarray (T, 2, 2, 2, 1) complex
+    t_idx     : int — time index to snapshot
+    z_comp    : 0 -> tip z = Im[x],  1 -> tip z = Im[p]
+    color_map : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    """
+    if color_map is None:
+        color_map = _DEFAULT_COLOR_MAP_3D
+
+    for (j, k), label, role in _INDEX_MAP_3D:
+        color = color_map[role]
+        vec   = r_JK_t[t_idx, j, k, :, 0]
+        rx    = vec[0].real
+        rp    = vec[1].real
+        z     = vec[z_comp].imag
+
+        ax.plot([], [], [], color=color, linewidth=1.8, label=label)
+        _draw_vector_3d(ax, np.array([rx, rp, z]), color)
+
+
+def Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=None):
+    """Draw one axis-aligned ellipsoid per (j,k) entry at time t_idx.
+
+    Semi-axes = sqrt of relevant sigma_JK diagonal entries:
+      z_comp=0: ax_x=sqrt(Re[s00]), ax_y=sqrt(Re[s11]), ax_z=sqrt(Im[s00])
+      z_comp=1: ax_x=sqrt(Re[s00]), ax_y=sqrt(Re[s11]), ax_z=sqrt(Im[s11])
+
+    Parameters
+    ----------
+    ax           : Axes3D returned by _make_scene_3d
+    r_JK_t       : ndarray (T, 2, 2, 2, 1) complex
+    sigma_JK_t   : ndarray (T, 2, 2, 2, 2) complex
+    t_idx        : int — time index
+    z_comp       : 0 -> z = Im[x],  1 -> z = Im[p]
+    color_map    : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    """
+    if color_map is None:
+        color_map = _DEFAULT_COLOR_MAP_3D
+
+    for (j, k), label, role in _INDEX_MAP_3D:
+        color = color_map[role]
+        vec   = r_JK_t[t_idx, j, k, :, 0]
+        sig   = sigma_JK_t[t_idx, j, k]
+
+        cx = vec[0].real
+        cy = vec[1].real
+        cz = vec[z_comp].imag
+
+        s00 = sig[0, 0]
+        s11 = sig[1, 1]
+
+        ax_x = _safe_sqrt_3d(s00.real, f"Re[sigma_00] ({role})")
+        ax_y = _safe_sqrt_3d(s11.real, f"Re[sigma_11] ({role})")
+        ax_z = _safe_sqrt_3d(s00.imag if z_comp == 0 else s11.imag,
+                             f"Im[sigma_{'00' if z_comp==0 else '11'}] ({role})")
+
+        _draw_ellipsoid_3d(ax, cx, cy, cz, ax_x, ax_y, ax_z, color)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PUBLIC UTILITIES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def Sym_Lim_From_Data(*arrays, pad=1.08):
+    """Compute a symmetric integer limit (-L, L) that covers all values.
+
+    Example
+    -------
+    sl = Sym_Lim_From_Data(GCS.r_JK_t)
+    sl = Sym_Lim_From_Data(GCS.r_JK_t, GCS.sigma_JK_t)
+    """
+    all_vals = [0.0]
+    for a in arrays:
+        if np.isscalar(a):
+            all_vals.append(float(a))
+        else:
+            all_vals.extend(np.asarray(a).ravel().real)
+            all_vals.extend(np.asarray(a).ravel().imag)
+    L = int(np.ceil(max(abs(np.min(all_vals)), abs(np.max(all_vals))) * pad))
+    return (-L, L)
+
+
+def Make_Legend_Handle_3D(label, color, lw=2.0):
+    """Build one Line2D legend entry for a 3-D phase-space plot.
+
+    Example
+    -------
+    handles = [Make_Legend_Handle_3D(r'$r^{on}_{+}$', 'royalblue'),
+               Make_Legend_Handle_3D(r'$r^{off}$',    'tomato')]
+    """
+    return mlines.Line2D([], [], color=color, linewidth=lw, label=label)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CONVENIENCE WRAPPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def Plot_Trajectories_Single(r_JK_t, z_comp=0,
+                             title="Dynamics of the first moments",
+                             legend_handles=None,
+                             color_map=None,
+                             sym_lim=None,
+                             figsize=(10, 10), elev=22, azim=-55):
+    """One-call wrapper: trajectories in a single 3-D panel.
+
+    Parameters
+    ----------
+    r_JK_t         : ndarray (T, 2, 2, 2, 1) complex — first moments
+    z_comp         : 0 -> Im[x],  1 -> Im[p] on z-axis
+    title          : figure title string
+    legend_handles : explicit legend entries (None = auto, [] = none)
+    color_map      : dict role->colour (None = defaults)
+    sym_lim        : (lo, hi) — computed from r_JK_t if None
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral' 
+
+    if sym_lim is None:
+        sym_lim = Sym_Lim_From_Data(r_JK_t)
+
+    fig, ax = _make_scene_3d(sym_lim, z_comp=z_comp,
+                             figsize=figsize, elev=elev, azim=azim)
+    Draw_XY_Plane(ax, sym_lim)
+    Draw_Curves(ax, r_JK_t, z_comp, color_map=color_map)
+    _finalise_3d(ax, fig, sym_lim, z_comp,
+                 title=title, legend_handles=legend_handles)
+    return fig, ax
+
+
+def Plot_Vectors_Single(r_JK_t, t_idx, z_comp=0,
+                        title="First moments",
+                        legend_handles=None,
+                        color_map=None,
+                        sym_lim=None,
+                        figsize=(10, 10), elev=22, azim=-55):
+    """One-call wrapper: snapshot vectors in a single 3-D panel.
+
+    Parameters
+    ----------
+    r_JK_t         : ndarray (T, 2, 2, 2, 1) complex — first moments
+    t_idx          : int — time index to snapshot
+    z_comp         : 0 -> Im[x],  1 -> Im[p] on z-axis
+    title          : figure title string
+    legend_handles : explicit legend entries (None = auto, [] = none)
+    color_map      : dict role->colour (None = defaults)
+    sym_lim        : (lo, hi) — computed from r_JK_t if None
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral'
+    
+    if sym_lim is None:
+        sym_lim = Sym_Lim_From_Data(r_JK_t)
+
+    fig, ax = _make_scene_3d(sym_lim, z_comp=z_comp,
+                             figsize=figsize, elev=elev, azim=azim)
+    Draw_XY_Plane(ax, sym_lim)
+    Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=color_map)
+    _finalise_3d(ax, fig, sym_lim, z_comp,
+                 title=title, legend_handles=legend_handles)
+    return fig, ax
+
+
+def Plot_Vectors_Ellipsoids_Single(r_JK_t, sigma_JK_t, t_idx, z_comp=0,
+                                   title="First moments with uncertainty",
+                                   legend_handles=None,
+                                   color_map=None,
+                                   sym_lim=None,
+                                   figsize=(10, 10), elev=22, azim=-55):
+    """One-call wrapper: vectors + uncertainty ellipsoids in a single 3-D panel.
+
+    Parameters
+    ----------
+    r_JK_t       : ndarray (T, 2, 2, 2, 1) complex — first moments
+    sigma_JK_t   : ndarray (T, 2, 2, 2, 2) complex — covariance matrices
+    t_idx        : int — time index to snapshot
+    z_comp       : 0 -> Im[x],  1 -> Im[p] on z-axis
+    title        : figure title string
+    legend_handles : explicit legend entries (None = auto, [] = none)
+    color_map    : dict role->colour (None = defaults)
+    sym_lim      : (lo, hi) — computed from r_JK_t if None
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral'
+
+    if sym_lim is None:
+        sym_lim = Sym_Lim_From_Data(r_JK_t)
+
+    fig, ax = _make_scene_3d(sym_lim, z_comp=z_comp,
+                             figsize=figsize, elev=elev, azim=azim)
+    Draw_XY_Plane(ax, sym_lim)
+    Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=color_map)
+    Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=color_map)
+    _finalise_3d(ax, fig, sym_lim, z_comp,
+                 title=title, legend_handles=legend_handles)
+    return fig, ax
