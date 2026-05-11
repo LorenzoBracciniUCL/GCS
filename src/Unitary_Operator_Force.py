@@ -52,70 +52,98 @@ def Compute_phi_JK_Unitary_Force(n_modes, r_0_t, r_0, r_J_t,r_J, r_K_t, r_K, H_m
 
 
 def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_m, r_ham_array, H_q_0_array, t_array):
+    """
+    r_0     : (2n, 1)                   — single IC for all branches, OR
+              (2^N, 2^N, 2n, 1)         — per-branch IC
+    sigma_0 : (2n, 2n)                  — single IC for all branches, OR
+              (2^N, 2^N, 2n, 2n)        — per-branch IC
+    """
+    N2 = 2**N_qubits
     H_m_inv = np.linalg.inv(H_m)
-    
-    sigma_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 2*n_modes))
-    r_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 1 ), dtype =np.complex64)
-    C_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits))
-    phi_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits))
+
+    if sigma_0.ndim == 4:
+        sigma_0_jk = sigma_0
+        r_0_jk = r_0
+    else:
+        sigma_0_jk = np.broadcast_to(sigma_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 2*n_modes))
+        r_0_jk = np.broadcast_to(r_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 1))
+
+    sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 2*n_modes))
+    r_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 1), dtype=np.complex64)
+    C_JK_t = np.zeros((len(t_array), N2, N2))
+    phi_JK_t = np.zeros((len(t_array), N2, N2))
 
     for i in range(len(t_array)):
-        # Compute simplectic transformation and covariant matrix (all equal)
-
         S_m_t = Gaussian.Compute_S_m(n_modes, H_m, t_array[i])
-        sigma_JK_t[i] = Compute_Sigma_JK_Unitary_Force(N_qubits, n_modes, sigma_0, S_m_t)
-        r_0_t = S_m_t@r_0
-        
-        for j in range(2**N_qubits):
+
+        for j in range(N2):
             J_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, j)
             r_J = Compute_tilde_r_J(N_qubits, J_labels, H_m_inv, r_ham_array)
             r_J_t = S_m_t@r_J
-            
-            for k in range(2**N_qubits):
+
+            for k in range(N2):
                 K_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, k)
                 r_K = Compute_tilde_r_J(N_qubits, K_labels, H_m_inv, r_ham_array)
                 r_K_t = S_m_t@r_K
-                # Compute quantities 
-                r_JK_t[i,j,k] = Compute_R_JK_Unitary_Force(n_modes, r_0_t, sigma_JK_t[i,j,k], r_J_t, r_J, r_K_t, r_K)
-                C_JK_t[i,j,k] = Compute_C_JK_Unitary_Force(n_modes, sigma_JK_t[i,j,k], r_J_t, r_J, r_K_t, r_K)
-                phi_JK_t[i,j,k] = Compute_phi_JK_Unitary_Force(n_modes, r_0_t, r_0, r_J_t,r_J, r_K_t, r_K, H_m, H_q_0_array,J_labels, K_labels, t_array[i])
-                            
-    return sigma_JK_t, r_JK_t, C_JK_t, phi_JK_t 
+
+                sigma_jk_t = Gaussian.Compute_sigma_t_S_m(sigma_0_jk[j,k], S_m_t)
+                sigma_JK_t[i,j,k] = sigma_jk_t
+                r_0_t = S_m_t@r_0_jk[j,k]
+
+                r_JK_t[i,j,k] = Compute_R_JK_Unitary_Force(n_modes, r_0_t, sigma_jk_t, r_J_t, r_J, r_K_t, r_K)
+                C_JK_t[i,j,k] = Compute_C_JK_Unitary_Force(n_modes, sigma_jk_t, r_J_t, r_J, r_K_t, r_K)
+                phi_JK_t[i,j,k] = Compute_phi_JK_Unitary_Force(n_modes, r_0_t, r_0_jk[j,k], r_J_t, r_J, r_K_t, r_K, H_m, H_q_0_array, J_labels, K_labels, t_array[i])
+
+    return sigma_JK_t, r_JK_t, C_JK_t, phi_JK_t
 
 
 def Dynamics_Analytical(N_qubits, n_modes, r_0, sigma_0, S_func, H_m, r_ham_array, H_q_0_array, t_array):
+    """
+    r_0     : (2n, 1)                   — single IC for all branches, OR
+              (2^N, 2^N, 2n, 1)         — per-branch IC
+    sigma_0 : (2n, 2n)                  — single IC for all branches, OR
+              (2^N, 2^N, 2n, 2n)        — per-branch IC
+    """
+    N2 = 2**N_qubits
     H_m_inv = np.linalg.inv(H_m)
-    
-    sigma_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 2*n_modes))
-    r_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 1 ), dtype =np.complex64)
-    C_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits))
-    phi_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits))
+
+    if sigma_0.ndim == 4:
+        sigma_0_jk = sigma_0
+        r_0_jk = r_0
+    else:
+        sigma_0_jk = np.broadcast_to(sigma_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 2*n_modes))
+        r_0_jk = np.broadcast_to(r_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 1))
+
+    sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 2*n_modes))
+    r_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 1), dtype=np.complex64)
+    C_JK_t = np.zeros((len(t_array), N2, N2))
+    phi_JK_t = np.zeros((len(t_array), N2, N2))
 
     for i in range(len(t_array)):
-        # Compute simplectic transformation and covariant matrix (all equal)
-
         S_m_t = S_func(t_array[i])
-        sigma_JK_t[i] = Compute_Sigma_JK_Unitary_Force(N_qubits, n_modes, sigma_0, S_m_t)
-        r_0_t = S_m_t@r_0
-        
-        for j in range(2**N_qubits):
+
+        for j in range(N2):
             J_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, j)
             r_J = Compute_tilde_r_J(N_qubits, J_labels, H_m_inv, r_ham_array)
             r_J_t = S_m_t@r_J
-            
-            for k in range(j, 2**N_qubits):
+
+            for k in range(j, N2):
                 K_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, k)
                 r_K = Compute_tilde_r_J(N_qubits, K_labels, H_m_inv, r_ham_array)
                 r_K_t = S_m_t@r_K
-                # Compute quantities 
-                r_JK_t[i,j,k] = Compute_R_JK_Unitary_Force(n_modes, r_0_t, sigma_JK_t[i,j,k], r_J_t, r_J, r_K_t, r_K)
-                C_JK_t[i,j,k] = Compute_C_JK_Unitary_Force(n_modes, sigma_JK_t[i,j,k], r_J_t, r_J, r_K_t, r_K)
-                phi_JK_t[i,j,k] = Compute_phi_JK_Unitary_Force(n_modes, r_0_t, r_0, r_J_t,r_J, r_K_t, r_K, H_m, H_q_0_array,J_labels, K_labels, t_array[i])
 
-                # Set complex conjugate  
-                sigma_JK_t[:,k,j] = np.conjugate(sigma_JK_t[:,j,k]) 
-                r_JK_t[:,k,j] = np.conjugate(r_JK_t[:,j,k]) 
-                C_JK_t[:,k,j] = C_JK_t[:,j,k]
-                phi_JK_t[:,k,j] = - phi_JK_t[:,j,k]
-                            
-    return sigma_JK_t, r_JK_t, C_JK_t, phi_JK_t 
+                sigma_jk_t = Gaussian.Compute_sigma_t_S_m(sigma_0_jk[j,k], S_m_t)
+                sigma_JK_t[i,j,k] = sigma_jk_t
+                r_0_t = S_m_t@r_0_jk[j,k]
+
+                r_JK_t[i,j,k] = Compute_R_JK_Unitary_Force(n_modes, r_0_t, sigma_jk_t, r_J_t, r_J, r_K_t, r_K)
+                C_JK_t[i,j,k] = Compute_C_JK_Unitary_Force(n_modes, sigma_jk_t, r_J_t, r_J, r_K_t, r_K)
+                phi_JK_t[i,j,k] = Compute_phi_JK_Unitary_Force(n_modes, r_0_t, r_0_jk[j,k], r_J_t, r_J, r_K_t, r_K, H_m, H_q_0_array, J_labels, K_labels, t_array[i])
+
+                # Set complex conjugate
+                sigma_JK_t[i,k,j] = np.conjugate(sigma_JK_t[i,j,k])
+                r_JK_t[i,k,j] = np.conjugate(r_JK_t[i,j,k])
+                C_JK_t[i,k,j] = C_JK_t[i,j,k]
+                phi_JK_t[i,k,j] = -phi_JK_t[i,j,k]
+
+    return sigma_JK_t, r_JK_t, C_JK_t, phi_JK_t
