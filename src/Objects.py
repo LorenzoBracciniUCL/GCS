@@ -161,11 +161,11 @@ class Quantum_State:
         self.sigma_0 = sigma_0.astype(complex)
         self.r_0 = r_0.astype(complex)
         self.rho_q_0 = rho_q_0.astype(complex)
-        self.type = 'Gaussian' # Gaussian or Cat
+        self.type = 'Gaussian' # Gaussian or GCS
 
         return
 
-    def Initialize_Cat_State(self, sigma_JK_0, r_JK_0, rho_q_0):
+    def Initialize_GCS(self, sigma_JK_0, r_JK_0, rho_q_0):
         """
         Initialize a general GCS with per-branch initial conditions.
         Typical use: feed the final time-step of a previous evolution,
@@ -175,12 +175,12 @@ class Quantum_State:
         r_JK_0     : (2^N, 2^N, 2n, 1)   — per-branch first moments
         rho_q_0    : (2^N, 2^N)           — per-branch QRDM elements
         """
-        print('Initializing a Cat State')
+        print('Initializing a GCS')
 
         self.sigma_0 = sigma_JK_0.astype(complex)
         self.r_0 = r_JK_0.astype(complex)
         self.rho_q_0 = rho_q_0.astype(complex)
-        self.type = 'Cat'
+        self.type = 'GCS'
 
         return
 
@@ -224,28 +224,47 @@ class Quantum_State:
         
         if Hamiltonian.type[0] == 'Constant':
             if Hamiltonian.type[1] == 'Gaussian':
-                self.r_t, self.sigma_t = Gaussian.Unitary_Numerical(self.n_modes, self.r_0, self.sigma_0, 
-                                                                        Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
-    
+                if self.type == 'GCS':
+                    N2 = 2**self.N_qubits
+                    self.sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 2*self.n_modes), dtype=complex)
+                    self.r_JK_t     = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 1), dtype=complex)
+                    for j in range(N2):
+                        for k in range(j, N2):
+                            r_jk, sigma_jk = Gaussian.Unitary_Numerical(self.n_modes, self.r_0[j,k], self.sigma_0[j,k],
+                                                                         Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
+                            self.r_JK_t[:,j,k]     = r_jk
+                            self.sigma_JK_t[:,j,k] = sigma_jk
+                            self.r_JK_t[:,k,j]     = np.conjugate(r_jk)
+                            self.sigma_JK_t[:,k,j] = np.conjugate(sigma_jk)
+                    self.C_JK_t   = np.zeros((len(t_array), N2, N2))
+                    self.phi_JK_t = np.zeros((len(t_array), N2, N2))
+                    self.rho_q_t  = np.tile(self.rho_q_0, (len(t_array), 1, 1))
+                    self.type = 'GCS'
+                else:
+                    self.r_t, self.sigma_t = Gaussian.Unitary_Numerical(self.n_modes, self.r_0, self.sigma_0,
+                                                                         Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
+
             elif Hamiltonian.type[1] == 'Force':
                 self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Force.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,  Hamiltonian.H_array[0], Hamiltonian.r_array, Hamiltonian.H_q_0_array, t_array)
                 self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                 self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                
+                self.type = 'GCS'
+
             elif Hamiltonian.type[1] == 'General':
-                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t = Unitary_Operator_Gaussian.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, 
+                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t = Unitary_Operator_Gaussian.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,
                                                                                                     Hamiltonian.H_array, Hamiltonian.r_array, Hamiltonian.H_q_0_array, self.rho_q_0, t_array)
                 self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                 self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                    
-    
+                self.type = 'GCS'
+
         elif Hamiltonian.type[0] == 'Time':
-            self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Time_Depentent.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func, 
+            self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Time_Depentent.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func,
                                                                                                             Hamiltonian.r_array_func, Hamiltonian.H_q_0_array_func, self.rho_q_0, self.t_array)
             self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
             self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-        
-        return 
+            self.type = 'GCS'
+
+        return
     
     def Unitary_Dynamics_Analytical(self, Hamiltonian, Symplectic, t_array):
         
@@ -254,21 +273,41 @@ class Quantum_State:
         
         if Symplectic.type == 'Constant':
             if Hamiltonian.type[1] == 'Gaussian':
-                self.r_t, self.sigma_t = Gaussian.Unitary_Analytical(self.n_modes, self.r_0, self.sigma_0, 
-                                                                                            Symplectic.symplectic_transformation, 
-                                                                                            Hamiltonian.H_array[0], Hamiltonian.r_array[0],  t_array)
+                if self.type == 'GCS':
+                    N2 = 2**self.N_qubits
+                    self.sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 2*self.n_modes), dtype=complex)
+                    self.r_JK_t     = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 1), dtype=complex)
+                    for j in range(N2):
+                        for k in range(j, N2):
+                            r_jk, sigma_jk = Gaussian.Unitary_Analytical(self.n_modes, self.r_0[j,k], self.sigma_0[j,k],
+                                                                          Symplectic.symplectic_transformation,
+                                                                          Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
+                            self.r_JK_t[:,j,k]     = r_jk
+                            self.sigma_JK_t[:,j,k] = sigma_jk
+                            self.r_JK_t[:,k,j]     = np.conjugate(r_jk)
+                            self.sigma_JK_t[:,k,j] = np.conjugate(sigma_jk)
+                    self.C_JK_t   = np.zeros((len(t_array), N2, N2))
+                    self.phi_JK_t = np.zeros((len(t_array), N2, N2))
+                    self.rho_q_t  = np.tile(self.rho_q_0, (len(t_array), 1, 1))
+                    self.type = 'GCS'
+                else:
+                    self.r_t, self.sigma_t = Gaussian.Unitary_Analytical(self.n_modes, self.r_0, self.sigma_0,
+                                                                          Symplectic.symplectic_transformation,
+                                                                          Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
             elif Hamiltonian.type[1] == 'Force':
-                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Force.Dynamics_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, 
+                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Force.Dynamics_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,
                                                                                                                     Symplectic.symplectic_transformation,
                                                                                                                     Hamiltonian.H_array[0], Hamiltonian.r_array, Hamiltonian.H_q_0_array, t_array)
                 self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                 self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-    
+                self.type = 'GCS'
+
         elif Symplectic.type == 'Time':
-            self.sigma_JK_t, self.r_JK_t, self.r_JK_0_t = Unitary_Operator_Time_Depentent.Dynamics_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func, 
+            self.sigma_JK_t, self.r_JK_t, self.r_JK_0_t = Unitary_Operator_Time_Depentent.Dynamics_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func,
                                                                                                                Hamiltonian.r_array_func, Hamiltonian.H_q_0_array_func, self.rho_q_0, self.t_array)
-        
-        return 
+            self.type = 'GCS'
+
+        return
     
     def Open_Dynamics_Numerical(self, Hamiltonian, Decoherence, t_array):
 
@@ -281,37 +320,53 @@ class Quantum_State:
         
         if Hamiltonian.type[0] == 'Constant':
             if Hamiltonian.type[1] == 'Gaussian':
-                print('Computing the Gaussian Time-Indipendent Dynamics of a Gaussian State')
-                self.r_t, self.sigma_t = Gaussian.Open_Numerical(self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array[0], Hamiltonian.r_array[0], E, D, t_array)
-                    
+                if self.type == 'GCS':
+                    N2 = 2**self.N_qubits
+                    self.sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 2*self.n_modes), dtype=complex)
+                    self.r_JK_t     = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 1), dtype=complex)
+                    for j in range(N2):
+                        for k in range(j, N2):
+                            r_jk, sigma_jk = Gaussian.Open_Numerical(self.n_modes, self.r_0[j,k], self.sigma_0[j,k],
+                                                                      Hamiltonian.H_array[0], Hamiltonian.r_array[0], E, D, t_array)
+                            self.r_JK_t[:,j,k]     = r_jk
+                            self.sigma_JK_t[:,j,k] = sigma_jk
+                            self.r_JK_t[:,k,j]     = np.conjugate(r_jk)
+                            self.sigma_JK_t[:,k,j] = np.conjugate(sigma_jk)
+                    self.C_JK_t   = np.zeros((len(t_array), N2, N2))
+                    self.phi_JK_t = np.zeros((len(t_array), N2, N2))
+                    self.rho_q_t  = np.tile(self.rho_q_0, (len(t_array), 1, 1))
+                    self.type = 'GCS'
+                else:
+                    print('Computing the Gaussian Time-Indipendent Dynamics of a Gaussian State')
+                    self.r_t, self.sigma_t = Gaussian.Open_Numerical(self.n_modes, self.r_0, self.sigma_0,
+                                                                      Hamiltonian.H_array[0], Hamiltonian.r_array[0], E, D, t_array)
 
-    
             elif Hamiltonian.type[1] == 'Force':
                 if E.all() == 0.0:
                     self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Open_Operator_Force.Dynamics_Symetric_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,  Hamiltonian.H_array[0], Hamiltonian.r_array, Hamiltonian.H_q_0_array, D, t_array)
                     self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                     self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                else: 
+                else:
                     self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Open_Operator_Force.Dynamics_General_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,  Hamiltonian.H_array[0], Hamiltonian.r_array, Hamiltonian.H_q_0_array, E, D, t_array)
                     self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                     self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                
-                
+                self.type = 'GCS'
+
             elif Hamiltonian.type[1] == 'General':
-            
-                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t = Open_Operator_Gaussian.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, 
-                                                                                                Hamiltonian.H_array, Hamiltonian.r_array, Hamiltonian.H_q_0_array, self.rho_q_0,E, D, t_array)
+                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t = Open_Operator_Gaussian.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,
+                                                                                                Hamiltonian.H_array, Hamiltonian.r_array, Hamiltonian.H_q_0_array, self.rho_q_0, E, D, t_array)
                 self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                 self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                
-    
+                self.type = 'GCS'
+
         elif Hamiltonian.type[0] == 'Time':
-            self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Open_Operator_Time_Depentent.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func, 
-                                                                                                            Hamiltonian.r_array_func, Hamiltonian.H_q_0_array_func, self.rho_q_0,E, D, self.t_array)
+            self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Open_Operator_Time_Depentent.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func,
+                                                                                                            Hamiltonian.r_array_func, Hamiltonian.H_q_0_array_func, self.rho_q_0, E, D, self.t_array)
             self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
             self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-            
-        return 
+            self.type = 'GCS'
+
+        return
 
     def Open_Dynamics_Analytical(self, Hamiltonian, Symplectic, t_array):
         self.t_array = t_array
@@ -320,50 +375,44 @@ class Quantum_State:
         
         if Symplectic.type == 'Constant':
             if Hamiltonian.type[1] == 'Gaussian':
-                if self.type == 'Gaussian':
-                    print('Computing the Gaussian Time-Indipendent Dynamics of a Gaussian State Semi-Analytically')
-                    self.r_t, self.sigma_t = Gaussian.Unitary_Analytical(self.n_modes, self.r_0, self.sigma_0, 
-                                                                                                Symplectic.symplectic_transformation, 
-                                                                                                Hamiltonian.H_array[0], Hamiltonian.r_array[0],  t_array)
-                    
-                elif self.type == 'Cat':
-                    print('Computing the Gaussian Time-Indipendent Dynamics of a Cat State')
-                    print('to do')
-                    
+                if self.type == 'GCS':
+                    N2 = 2**self.N_qubits
+                    self.sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 2*self.n_modes), dtype=complex)
+                    self.r_JK_t     = np.zeros((len(t_array), N2, N2, 2*self.n_modes, 1), dtype=complex)
+                    for j in range(N2):
+                        for k in range(j, N2):
+                            r_jk, sigma_jk = Gaussian.Unitary_Analytical(self.n_modes, self.r_0[j,k], self.sigma_0[j,k],
+                                                                          Symplectic.symplectic_transformation,
+                                                                          Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
+                            self.r_JK_t[:,j,k]     = r_jk
+                            self.sigma_JK_t[:,j,k] = sigma_jk
+                            self.r_JK_t[:,k,j]     = np.conjugate(r_jk)
+                            self.sigma_JK_t[:,k,j] = np.conjugate(sigma_jk)
+                    self.C_JK_t   = np.zeros((len(t_array), N2, N2))
+                    self.phi_JK_t = np.zeros((len(t_array), N2, N2))
+                    self.rho_q_t  = np.tile(self.rho_q_0, (len(t_array), 1, 1))
+                    self.type = 'GCS'
                 else:
-                    print('Please Initialise the State')
-    
+                    print('Computing the Gaussian Time-Indipendent Dynamics of a Gaussian State Semi-Analytically')
+                    self.r_t, self.sigma_t = Gaussian.Unitary_Analytical(self.n_modes, self.r_0, self.sigma_0,
+                                                                          Symplectic.symplectic_transformation,
+                                                                          Hamiltonian.H_array[0], Hamiltonian.r_array[0], t_array)
+
             elif Hamiltonian.type[1] == 'Force':
-                if self.type == 'Gaussian':
-                    print('Computing the Operator-Valued Force Time-Indipendent Dynamics of a Gaussian State')
-                    self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Force.Unitary_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, 
+                self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t  = Unitary_Operator_Force.Unitary_Analytical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,
                                                                                                                     Symplectic.symplectic_transformation,
                                                                                                                     Hamiltonian.H_array[0], Hamiltonian.r_array, Hamiltonian.H_q_0_array, t_array)
-                    self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
-                    self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
-                    
-                elif Quantum_State.type == 'Cat':
-                    print('Computing the Operator-Valued Force Time-Indipendent Dynamics of a Cat State')
-                    
-                else:
-                    print('Please Initialise the State')
-    
+                self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
+                self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
+                self.type = 'GCS'
+
         elif Symplectic.type == 'Time':
-            if self.type == 'Gaussian':
-                print('Computing the Genearl Opeator-Valued Time-Dependent Unitary Dynamics of a Gaussian State')
-    
-                self.sigma_JK_t, self.r_JK_t, self.r_JK_0_t = Unitary_Operator_Time_Depentent.Unitary_Gaussian_General_Time_Dep_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func, 
+            self.sigma_JK_t, self.r_JK_t, self.r_JK_0_t = Unitary_Operator_Time_Depentent.Unitary_Gaussian_General_Time_Dep_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, Hamiltonian.H_array_func,
                                                                                                                Hamiltonian.r_array_func, Hamiltonian.H_q_0_array_func, self.rho_q_0, self.t_array)
-                self.rho_q_t = np.exp(self.r_JK_0_t)
-                #self.sigma_JK_t, , self.C_JK_t, self.phi_JK_t = Unitary_Gaussian_General_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0, self.H_array, self.r_array, self.H_q_0_array, t_array)
-                    
-            elif self.type == 'Cat':
-                print('Computing the Genearl Opeator Time-Dependent Dynamics of a Cat State')
-                
-            else:
-                print('Please Initialise the State')
-        
-        return 
+            self.rho_q_t = np.exp(self.r_JK_0_t)
+            self.type = 'GCS'
+
+        return
 
 ################################## Measuraments ################################## 
 
