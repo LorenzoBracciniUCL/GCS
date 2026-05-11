@@ -53,7 +53,7 @@ def Compute_r_t_S_m(r_0, r_tilde_m, S_m,):
     S_matrix    Symplectic Transformation Matrix (2n x 2n)
     Output:  Vector of first moment at t (2n)
     """
-    r_t =np.real(S_m@(r_0 + r_tilde_m) - r_tilde_m)
+    r_t = np.real(S_m@(r_0 - r_tilde_m) + r_tilde_m)
     return r_t
 
 def Compute_sigma_t_S_m(sigma_0, S_matrix):
@@ -94,9 +94,10 @@ def Unitary_Numerical(n_modes, r_0, sigma_0, H_m, r_m, t_array):
     r_t = np.zeros((len(t_array),  2*n_modes, 1))
     sigma_t = np.zeros((len(t_array), 2*n_modes, 2*n_modes))
     
+    r_tilde_m = Compute_r_tilde(H_m, r_m)
     for i in range(len(t_array)):
         S_m_t = Compute_S_m(n_modes, H_m, t_array[i])
-        r_t[i] = Compute_r_t_S_m(r_0, r_m, S_m_t)
+        r_t[i] = Compute_r_t_S_m(r_0, r_tilde_m, S_m_t)
         sigma_t[i] = Compute_sigma_t_S_m(sigma_0, S_m_t)
         
     return r_t, sigma_t
@@ -205,7 +206,7 @@ def equation_dot_r(t, y, H_m, r_m, E, n_modes):
     r = y.reshape((2*n_modes, 1))  # Reshape to 2n x 1 vector
     
     # Compute derivative
-    r_dot = Omega @ (H_m + E) @ r - r_m
+    r_dot = Omega @ (H_m + E) @ r - Omega @ r_m
     
     return  r_dot.flatten()
     
