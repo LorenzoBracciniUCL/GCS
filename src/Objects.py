@@ -155,14 +155,33 @@ class Quantum_State:
         self.Measurament = None
 
     def Initialize_Gaussian_State(self, r_0, sigma_0,  rho_q_0):
-        
+
         print('Initializing a Gaussian State')
-        
+
         self.sigma_0 = sigma_0.astype(complex)
         self.r_0 = r_0.astype(complex)
         self.rho_q_0 = rho_q_0.astype(complex)
         self.type = 'Gaussian' # Gaussian or Cat
-        
+
+        return
+
+    def Initialize_Cat_State(self, sigma_JK_0, r_JK_0, rho_q_0):
+        """
+        Initialize a general GCS with per-branch initial conditions.
+        Typical use: feed the final time-step of a previous evolution,
+        or the post-measurement state produced by Mode_Measurament.
+
+        sigma_JK_0 : (2^N, 2^N, 2n, 2n)  — per-branch covariance matrices
+        r_JK_0     : (2^N, 2^N, 2n, 1)   — per-branch first moments
+        rho_q_0    : (2^N, 2^N)           — per-branch QRDM elements
+        """
+        print('Initializing a Cat State')
+
+        self.sigma_0 = sigma_JK_0.astype(complex)
+        self.r_0 = r_JK_0.astype(complex)
+        self.rho_q_0 = rho_q_0.astype(complex)
+        self.type = 'Cat'
+
         return
 
     def Start_Dynamics_Unitary(self):

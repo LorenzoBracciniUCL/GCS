@@ -133,42 +133,53 @@ def Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol,  H_j,
       
     return r_0_jk_sol[:,0]
 
-def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_array, r_ham_array, H_q_0_array, rho_q_0, E,D, t_array):
-    
-    sigma_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 2*n_modes),dtype =np.complex64)
-    r_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits, 2*n_modes, 1 ), dtype =np.complex64)
-    r_JK_0_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits), dtype =np.complex64)
-    C_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits), dtype =np.complex64)
-    phi_JK_t = np.zeros((len(t_array), 2**N_qubits, 2**N_qubits), dtype =np.complex64)
-    
-    r_J = np.zeros((2*n_modes, 1), dtype =np.complex64)
-    H_J = np.zeros((2*n_modes, 2*n_modes), dtype =np.complex64)
-    r_K = np.zeros((2*n_modes, 1), dtype =np.complex64)
-    H_K = np.zeros((2*n_modes, 2*n_modes), dtype =np.complex64)
+def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_array, r_ham_array, H_q_0_array, rho_q_0, E, D, t_array):
+    """
+    r_0     : (2n, 1)                   — single IC for all branches, OR
+              (2^N, 2^N, 2n, 1)         — per-branch IC
+    sigma_0 : (2n, 2n)                  — single IC for all branches, OR
+              (2^N, 2^N, 2n, 2n)        — per-branch IC
+    rho_q_0 : (2^N, 2^N)               — per-branch initial QRDM elements
+    """
+    N2 = 2**N_qubits
 
-    for j in range(2**N_qubits):
-        
+    # Detect per-branch vs single initial conditions and build (N2, N2, ...) views
+    if sigma_0.ndim == 4:
+        sigma_0_jk = sigma_0
+        r_0_jk = r_0
+    else:
+        sigma_0_jk = np.broadcast_to(sigma_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 2*n_modes))
+        r_0_jk = np.broadcast_to(r_0[np.newaxis, np.newaxis], (N2, N2, 2*n_modes, 1))
+
+    sigma_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 2*n_modes),dtype =np.complex128)
+    r_JK_t = np.zeros((len(t_array), N2, N2, 2*n_modes, 1 ), dtype =np.complex128)
+    r_JK_0_t = np.zeros((len(t_array), N2, N2), dtype =np.complex128)
+    C_JK_t = np.zeros((len(t_array), N2, N2), dtype =np.complex128)
+    phi_JK_t = np.zeros((len(t_array), N2, N2), dtype =np.complex128)
+
+    for j in range(N2):
+
         J_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, j)
         r_J = Compute_r_J(N_qubits, J_labels, r_ham_array)
         H_J = Compute_H_J(N_qubits, J_labels,  H_array)
 
-        for k in range(j, 2**N_qubits):
+        for k in range(j, N2):
             K_labels = QIT_Functions.Extract_Qubit_Labels_Array(N_qubits, k)
             r_K = Compute_r_J(N_qubits, K_labels, r_ham_array)
             H_K = Compute_H_J(N_qubits, K_labels,  H_array)
-            
-            # Compute quantities 
-            sigma_JK_t[:,j,k], sigma_JK_sol = Compute_sigma_JK_Open_General_Numerical(n_modes, sigma_0, H_J, H_K,  E, D, t_array)
-            r_JK_t[:,j,k], r_JK_sol = Compute_R_JK_Open_General_Numerical(n_modes, r_0, sigma_JK_sol, H_J, H_K, r_J, r_K,  E, D, t_array)
+
+            # Compute quantities
+            sigma_JK_t[:,j,k], sigma_JK_sol = Compute_sigma_JK_Open_General_Numerical(n_modes, sigma_0_jk[j,k], H_J, H_K,  E, D, t_array)
+            r_JK_t[:,j,k], r_JK_sol = Compute_R_JK_Open_General_Numerical(n_modes, r_0_jk[j,k], sigma_JK_sol, H_J, H_K, r_J, r_K,  E, D, t_array)
             r_JK_0_t[:,j,k] = Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol,  H_J, H_K, r_J, r_K, J_labels, K_labels, H_q_0_array,rho_q_0[j,k], t_array)
             C_JK_t[:,j,k] =  - np.real(r_JK_0_t[:,j,k] - np.log(rho_q_0[j,k]))
             phi_JK_t[:,j,k] = np.imag(r_JK_0_t[:,j,k] - np.log(rho_q_0[j,k]))
 
-            # Set complex conjugate  
-            sigma_JK_t[:,k,j] = np.conjugate(sigma_JK_t[:,j,k]) 
-            r_JK_t[:,k,j] = np.conjugate(r_JK_t[:,j,k]) 
-            r_JK_0_t[:,k,j] = np.conjugate(r_JK_0_t[:,j,k]) 
+            # Set complex conjugate
+            sigma_JK_t[:,k,j] = np.conjugate(sigma_JK_t[:,j,k])
+            r_JK_t[:,k,j] = np.conjugate(r_JK_t[:,j,k])
+            r_JK_0_t[:,k,j] = np.conjugate(r_JK_0_t[:,j,k])
             C_JK_t[:,k,j] = C_JK_t[:,j,k]
             phi_JK_t[:,k,j] = - phi_JK_t[:,j,k]
-                       
+
     return sigma_JK_t, r_JK_t, C_JK_t, phi_JK_t
