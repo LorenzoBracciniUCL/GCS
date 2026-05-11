@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Mathematica working notebooks — ignored to avoid noisy binary diffs on every save.
+# Commit milestone snapshots under a different name (e.g. *_v1.nb, *_snapshot.nb).
+Mathematica_Analytical.nb
+Claude_GCS.nb
