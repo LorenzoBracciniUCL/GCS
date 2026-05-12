@@ -124,7 +124,7 @@ def CM_Homodyne_Noisy_1Mode(n_modes, mode_number, axis_angle, efficency):
 
 def CM_Heterodyne_Noisy_1Mode(n_modes, mode_number, axis_angle, efficency):
     
-    efficency_angle = np.sqrt(np.arccos(efficency))
+    efficency_angle = np.arccos(np.sqrt(efficency))
 
     sigma_m = np.zeros((2*n_modes, 2*n_modes))
     heterodyne = (1  + 2*np.tan(efficency_angle)**2)*np.eye(2,2)

@@ -12,8 +12,39 @@ from matplotlib import colors
 from fractions import Fraction as Fraction
 import matplotlib.animation as animation
 import matplotlib.lines as mlines
+from matplotlib.patches import Ellipse
 from mpl_toolkits.mplot3d import Axes3D           # noqa: F401
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+def Select_Mode(mode, r_JK, sigma_JK):
+    """Slice a single bosonic mode out of multi-mode GCS arrays.
+
+    For canonical ordering (x₁,p₁, x₂,p₂, …, xₙ,pₙ) mode `m` lives at
+    phase-space indices [2m, 2m+1].  Works on both time-series and single
+    snapshots because it only touches the last phase-space axes.
+
+    Parameters
+    ----------
+    mode     : int — 0-indexed mode to extract
+    r_JK     : (..., 2n, 1) array of first moments
+    sigma_JK : (..., 2n, 2n) array of covariance matrices
+
+    Returns
+    -------
+    r_m     : (..., 2, 1)   — first moments for mode `m`
+    sigma_m : (..., 2, 2)   — covariance matrix for mode `m`
+
+    Examples
+    --------
+    # prepare mode 1 of a 3-mode state before any plot call
+    r_1, s_1 = Select_Mode(1, GCS.r_JK_t, GCS.sigma_JK_t)
+    Plot_Trajectories_Single(r_1)
+    """
+    idx = [2 * mode, 2 * mode + 1]
+    r_m     = r_JK[..., idx, :]
+    sigma_m = sigma_JK[..., idx, :][..., idx]
+    return r_m, sigma_m
+
 
 def format_latex_numbers(arr):
     formatted = []
@@ -25,19 +56,29 @@ def format_latex_numbers(arr):
             formatted.append(f'${frac.numerator}/{frac.denominator}$')
     return formatted
 
-def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
+def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save, mode=0):
 
     rcParams['mathtext.fontset'] = 'cm'
     rcParams['font.family'] = 'STIXGeneral'
+
+    x_idx = 2 * mode
+    p_idx = 2 * mode + 1
+
+    N2 = 2 ** GCS.N_qubits
+    if N2 == 2:
+        _colors = ['tab:blue', 'tomato']
+    else:
+        _cmap = plt.cm.get_cmap('tab10')
+        _colors = [_cmap(i % 10) for i in range(N2)]
 
     fig, axes = plt.subplots(2, 3,figsize=(6,4), dpi = 350)
     fig.subplots_adjust(wspace=0.1, hspace=0.2)
 
 
-    max_x = np.max(np.array([np.real(GCS.r_JK_t[:,:,:,0]),np.imag(GCS.r_JK_t[:,:,:,0])]))*1.1
-    min_x = np.min(np.array([np.real(GCS.r_JK_t[:,:,:,0]),np.imag(GCS.r_JK_t[:,:,:,0])]))*1.1
-    max_p = np.max(np.array([np.real(GCS.r_JK_t[:,:,:,1]),np.imag(GCS.r_JK_t[:,:,:,1])]))*1.1
-    min_p = np.min(np.array([np.real(GCS.r_JK_t[:,:,:,1]),np.imag(GCS.r_JK_t[:,:,:,1])]))*1.1
+    max_x = np.max(np.array([np.real(GCS.r_JK_t[:,:,:,x_idx]),np.imag(GCS.r_JK_t[:,:,:,x_idx])]))*1.1
+    min_x = np.min(np.array([np.real(GCS.r_JK_t[:,:,:,x_idx]),np.imag(GCS.r_JK_t[:,:,:,x_idx])]))*1.1
+    max_p = np.max(np.array([np.real(GCS.r_JK_t[:,:,:,p_idx]),np.imag(GCS.r_JK_t[:,:,:,p_idx])]))*1.1
+    min_p = np.min(np.array([np.real(GCS.r_JK_t[:,:,:,p_idx]),np.imag(GCS.r_JK_t[:,:,:,p_idx])]))*1.1
 
 
     lables_pi = format_latex_numbers(array_pi)
@@ -81,14 +122,11 @@ def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
 
     axes[0,0].set_title('On Diagonal', fontsize=15)
 
-    axes[0,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,0,0,0], color='tab:blue')
-    axes[0,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,1,1,0], color='tomato')
-    
-    axes[0,0].set_ylabel(r'Position ($x = X/x_0$)',labelpad=2, fontsize=13)
+    for j in range(N2):
+        axes[0,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,j,j,x_idx], color=_colors[j])
+        axes[1,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,j,j,p_idx], color=_colors[j])
 
-    axes[1,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,0,0,1], color='tab:blue')
-    axes[1,0].plot(GCS.t_array/(np.pi), GCS.r_JK_t[:,1,1,1], color='tomato')
-    
+    axes[0,0].set_ylabel(r'Position ($x = X/x_0$)',labelpad=2, fontsize=13)
     axes[1,0].set_ylabel(r'Momentum ($p= P/p_0$)',labelpad=2, fontsize=13)
 
 
@@ -96,15 +134,16 @@ def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
 
     axes[0,1].set_title('Off Diagonal', fontsize=15)
 
-    axes[0,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,0,1,0]), color='tab:blue')
-    axes[0,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,1,0,0]), color='tomato')
-    axes[0,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,0,1,0]),'--', color='tab:blue')
-    axes[0,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,1,0,0]), '--', color='tomato')
-
-    axes[1,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,0,1,1]), color='tab:blue')
-    axes[1,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,1,0,1]), color='tomato')
-    axes[1,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,0,1,1]), '--',color='tab:blue')
-    axes[1,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,1,0,1]), '--', color='tomato')
+    for j in range(N2):
+        for k in range(j + 1, N2):
+            axes[0,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,j,k,x_idx]), color=_colors[j])
+            axes[0,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,k,j,x_idx]), color=_colors[k])
+            axes[0,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,j,k,x_idx]), '--', color=_colors[j])
+            axes[0,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,k,j,x_idx]), '--', color=_colors[k])
+            axes[1,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,j,k,p_idx]), color=_colors[j])
+            axes[1,1].plot(GCS.t_array/(np.pi), np.real(GCS.r_JK_t[:,k,j,p_idx]), color=_colors[k])
+            axes[1,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,j,k,p_idx]), '--', color=_colors[j])
+            axes[1,1].plot(GCS.t_array/(np.pi), np.imag(GCS.r_JK_t[:,k,j,p_idx]), '--', color=_colors[k])
     
 
 #################################### QRDM ####################################\
@@ -114,18 +153,22 @@ def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
     axes[0,2].axvline(x=0, color='black',linewidth=0.5, alpha=0.4)
     axes[0,2].axhline(y=0, color='black',linewidth=0.5, alpha=0.4)
 
-    axes[0,2].plot(GCS.t_array/(np.pi), GCS.C_JK_t[:,0,1], color='tab:blue')
-    axes[0,2].plot(GCS.t_array/(np.pi), GCS.C_JK_t[:,1,0], ':', color='tomato')
+    for j in range(N2):
+        for k in range(j + 1, N2):
+            axes[0,2].plot(GCS.t_array/(np.pi), GCS.C_JK_t[:,j,k], color=_colors[j])
+            axes[0,2].plot(GCS.t_array/(np.pi), GCS.C_JK_t[:,k,j], ':', color=_colors[k])
     axes[0,2].set_ylabel(r'Contrasts $(C)$',labelpad=15, fontsize=13,rotation=-90)
 
     #################################### Time Evolution Phases ####################################
     axes[1,2].axvline(x=0, color='black',linewidth=0.5, alpha=0.4)
     axes[1,2].axhline(y=0, color='black',linewidth=0.5, alpha=0.4)
 
-    axes[1,2].plot(GCS.t_array/(np.pi), np.sin(GCS.phi_JK_t[:,0,1]), color='tab:blue')
-    axes[1,2].plot(GCS.t_array/(np.pi), np.sin(GCS.phi_JK_t[:,1,0]),  color='tomato')
-    
-    axes[1,2].set_ylabel(r'$\cos(\phi)$',labelpad=15, fontsize=13, rotation=-90)
+    for j in range(N2):
+        for k in range(j + 1, N2):
+            axes[1,2].plot(GCS.t_array/(np.pi), np.sin(GCS.phi_JK_t[:,j,k]), color=_colors[j])
+            axes[1,2].plot(GCS.t_array/(np.pi), np.sin(GCS.phi_JK_t[:,k,j]), color=_colors[k])
+
+    axes[1,2].set_ylabel(r'$\sin(\phi)$',labelpad=15, fontsize=13, rotation=-90)
 
     
     for axis in ['top','bottom','left','right']:
@@ -135,17 +178,21 @@ def Plot_Phase_Space_First_QRDM_Func(GCS, leged_lables, array_pi, save):
 
     #################################### Plot Design ####################################
     
-    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]),  color='tab:blue', label ="Up")
-    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]),   color='tomato', label ="Down")
-    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]),  color='gray', label ="Real")
-    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]), '--',  color='gray', label ="Complex")
-    
-    for i in range(len(leged_lables)):
-        axes[1,1].scatter(-1000,-1000, color = 'black', label = leged_lables[i])
+    if N2 == 2:
+        _branch_labels = ['Up', 'Down']
+    else:
+        _branch_labels = [f'$J_{{{j}}}$' for j in range(N2)]
+    for j in range(N2):
+        axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]), color=_colors[j], label=_branch_labels[j])
+    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]),  color='gray', label='Real')
+    axes[1,1].plot(np.array([-1000, -1001]),np.array([-1000, -1001]), '--', color='gray', label='Complex')
 
-    
-    
-    leg = fig.legend( loc='upper center', bbox_to_anchor=(0.50, 0.51),ncol=4+len(leged_lables), borderpad=-0.5, fontsize=11,labelspacing=0.2,handlelength=1.4)
+    for i in range(len(leged_lables)):
+        axes[1,1].scatter(-1000,-1000, color='black', label=leged_lables[i])
+
+    leg = fig.legend(loc='upper center', bbox_to_anchor=(0.50, 0.51),
+                     ncol=N2+2+len(leged_lables), borderpad=-0.5, fontsize=11,
+                     labelspacing=0.2, handlelength=1.4)
     leg.get_frame().set_edgecolor('w')
     for line in leg.get_lines():
         line.set_linewidth(1.1)
@@ -778,7 +825,7 @@ _LON_U_3D = np.linspace(0, 2*np.pi, _N_LON_3D, endpoint=False)
 #  PRIVATE DRAWING PRIMITIVES
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color):
+def _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color, alpha=1.0):
     """Flat filled 2-D triangle arrowhead embedded in 3-D space."""
     base = tip - direction * head_len
     ref  = np.array([0., 0., 1.]) if abs(direction[2]) < 0.9 else np.array([1., 0., 0.])
@@ -786,7 +833,7 @@ def _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color):
     perp /= np.linalg.norm(perp)
     v0, v1, v2 = tip, base + perp*(head_width/2), base - perp*(head_width/2)
     ax.add_collection3d(Poly3DCollection([[v0, v1, v2]],
-                        facecolor=color, edgecolor=color,
+                        facecolor=color, edgecolor=color, alpha=alpha,
                         linewidth=0.5, zorder=15))
 
 
@@ -853,7 +900,7 @@ def _safe_sqrt_3d(val, label=""):
     return np.sqrt(max(float(val), 0.0))
 
 
-def _draw_vector_3d(ax, tip, color, lw=1.8, head_frac=0.12):
+def _draw_vector_3d(ax, tip, color, lw=1.8, head_frac=0.12, alpha=1.0):
     """Draw a single arrow from the origin to tip: shaft + flat triangle head."""
     tip    = np.asarray(tip, dtype=float)
     origin = np.zeros(3)
@@ -869,9 +916,9 @@ def _draw_vector_3d(ax, tip, color, lw=1.8, head_frac=0.12):
     ax.plot([origin[0], shaft_tip[0]],
             [origin[1], shaft_tip[1]],
             [origin[2], shaft_tip[2]],
-            color=color, linewidth=lw, zorder=10)
+            color=color, linewidth=lw, alpha=alpha, zorder=10)
 
-    _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color)
+    _triangle_arrowhead_3d(ax, tip, direction, head_len, head_width, color, alpha=alpha)
 
 
 def _draw_ellipsoid_3d(ax, cx, cy, cz, ax_x, ax_y, ax_z, color,
@@ -985,16 +1032,18 @@ def Draw_Curves(ax, r_JK_t, z_comp, color_map=None):
                                    color=color)
 
 
-def Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=None):
+def Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=None, alpha=1.0, add_legend_entry=True):
     """Draw first-moment vectors as arrows from origin at time t_idx.
 
     Parameters
     ----------
-    ax        : Axes3D returned by _make_scene_3d
-    r_JK_t    : ndarray (T, 2, 2, 2, 1) complex
-    t_idx     : int — time index to snapshot
-    z_comp    : 0 -> tip z = Im[x],  1 -> tip z = Im[p]
-    color_map : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    ax               : Axes3D returned by _make_scene_3d
+    r_JK_t           : ndarray (T, 2, 2, 2, 1) complex
+    t_idx            : int — time index to snapshot
+    z_comp           : 0 -> tip z = Im[x],  1 -> tip z = Im[p]
+    color_map        : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    alpha            : float — opacity of arrows (default 1.0)
+    add_legend_entry : bool — whether to add dummy legend handles (default True)
     """
     if color_map is None:
         color_map = _DEFAULT_COLOR_MAP_3D
@@ -1006,11 +1055,12 @@ def Draw_Vectors(ax, r_JK_t, t_idx, z_comp, color_map=None):
         rp    = vec[1].real
         z     = vec[z_comp].imag
 
-        ax.plot([], [], [], color=color, linewidth=1.8, label=label)
-        _draw_vector_3d(ax, np.array([rx, rp, z]), color)
+        if add_legend_entry:
+            ax.plot([], [], [], color=color, linewidth=1.8, label=label)
+        _draw_vector_3d(ax, np.array([rx, rp, z]), color, alpha=alpha)
 
 
-def Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=None):
+def Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=None, alpha=1.0):
     """Draw one axis-aligned ellipsoid per (j,k) entry at time t_idx.
 
     Semi-axes = sqrt of relevant sigma_JK diagonal entries:
@@ -1025,6 +1075,7 @@ def Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=None):
     t_idx        : int — time index
     z_comp       : 0 -> z = Im[x],  1 -> z = Im[p]
     color_map    : dict role->colour (uses _DEFAULT_COLOR_MAP_3D if None)
+    alpha        : float in (0, 1] — overall opacity scale (default 1.0)
     """
     if color_map is None:
         color_map = _DEFAULT_COLOR_MAP_3D
@@ -1046,7 +1097,8 @@ def Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp, color_map=None):
         ax_z = _safe_sqrt_3d(s00.imag if z_comp == 0 else s11.imag,
                              f"Im[sigma_{'00' if z_comp==0 else '11'}] ({role})")
 
-        _draw_ellipsoid_3d(ax, cx, cy, cz, ax_x, ax_y, ax_z, color)
+        _draw_ellipsoid_3d(ax, cx, cy, cz, ax_x, ax_y, ax_z, color,
+                           surf_alpha=0.18*alpha, line_alpha=0.25*alpha)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1185,3 +1237,295 @@ def Plot_Vectors_Ellipsoids_Single(r_JK_t, sigma_JK_t, t_idx, z_comp=0,
     _finalise_3d(ax, fig, sym_lim, z_comp,
                  title=title, legend_handles=legend_handles)
     return fig, ax
+
+
+def Plot_Vectors_Ellipsoids_Multi_Time(r_JK_t, sigma_JK_t, t_idx_array, alpha_array,
+                                       z_comp=0,
+                                       title="First moments with uncertainty",
+                                       legend_handles=None,
+                                       color_map=None,
+                                       sym_lim=None,
+                                       figsize=(10, 10), elev=22, azim=-55):
+    """Static 3-D plot: vectors + ellipsoids at multiple time snapshots.
+
+    Colors are fixed per branch; opacity encodes time via alpha_array, letting
+    the reader perceive dynamics without animation.  Legend entries are added
+    once (from the first snapshot) so they appear fully opaque.
+
+    Parameters
+    ----------
+    r_JK_t       : ndarray (T, 2, 2, 2, 1) complex — first moments
+    sigma_JK_t   : ndarray (T, 2, 2, 2, 2) complex — covariance matrices
+    t_idx_array  : sequence of int — time indices to render (e.g. [0, 10, 20, -1])
+    alpha_array  : sequence of float — opacity for each time in t_idx_array
+                   (e.g. [0.15, 0.35, 0.6, 1.0] — earlier = more transparent)
+    z_comp       : 0 -> Im[x] on z-axis,  1 -> Im[p] on z-axis
+    title        : figure title string
+    legend_handles : explicit legend entries (None = auto from first snapshot)
+    color_map    : dict role->colour (None = defaults)
+    sym_lim      : (lo, hi) — computed from r_JK_t and sigma_JK_t if None
+
+    Example
+    -------
+    t_indices = [0, 25, 50, 75, -1]
+    alphas    = [0.10, 0.25, 0.45, 0.70, 1.0]
+    fig, ax = Plot_Vectors_Ellipsoids_Multi_Time(r_m, s_m, t_indices, alphas)
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral'
+
+    if sym_lim is None:
+        sym_lim = Sym_Lim_From_Data(r_JK_t, sigma_JK_t)
+
+    fig, ax = _make_scene_3d(sym_lim, z_comp=z_comp,
+                             figsize=figsize, elev=elev, azim=azim)
+    Draw_XY_Plane(ax, sym_lim)
+
+    for i, (t_idx, alpha) in enumerate(zip(t_idx_array, alpha_array)):
+        add_entry = (i == 0)   # legend entries added only on first pass
+        Draw_Vectors(ax, r_JK_t, t_idx, z_comp,
+                     color_map=color_map, alpha=alpha, add_legend_entry=add_entry)
+        Draw_Ellipsoids(ax, r_JK_t, sigma_JK_t, t_idx, z_comp,
+                        color_map=color_map, alpha=alpha)
+
+    _finalise_3d(ax, fig, sym_lim, z_comp,
+                 title=title, legend_handles=legend_handles)
+    return fig, ax
+
+
+def Plot_Diagonal_Multi_Time_2D(r_JK_t, sigma_JK_t, t_idx_array, alpha_array,
+                                 color_map=None, sym_lim=None,
+                                 title="On-diagonal first moments",
+                                 figsize=(6, 6)):
+    """2-D phase-space plot of on-diagonal first moments at multiple times.
+
+    Draws one arrow (origin → (Re[x], Re[p])) and one uncertainty ellipse
+    per on-diagonal branch (j=k) at each time in t_idx_array.  Color is
+    fixed per branch; alpha encodes time so the reader perceives dynamics
+    without animation.  The ellipse orientation comes from the full 2×2
+    covariance eigendecomposition.
+
+    Parameters
+    ----------
+    r_JK_t      : ndarray (T, N2, N2, 2, 1) — first moments (after Select_Mode)
+    sigma_JK_t  : ndarray (T, N2, N2, 2, 2) — covariance matrices
+    t_idx_array : sequence of int — time indices to render
+    alpha_array : sequence of float — opacity per time step
+                  (e.g. [0.15, 0.40, 0.70, 1.0] — earlier = more transparent)
+    color_map   : dict role->colour (None = defaults; used only for N2==2)
+    sym_lim     : (lo, hi) or float — axis limits; auto-computed if None
+    title       : axes title string
+    figsize     : figure size tuple
+
+    Example
+    -------
+    t_indices = [0, 25, 50, -1]
+    alphas    = [0.15, 0.40, 0.70, 1.0]
+    fig, ax = Plot_Diagonal_Multi_Time_2D(r_m, s_m, t_indices, alphas)
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral'
+
+    if color_map is None:
+        color_map = _DEFAULT_COLOR_MAP_3D
+
+    N2 = r_JK_t.shape[1]
+    if N2 == 2:
+        diag_map = [((0, 0), r"$r^{\mathrm{on}}_{+}$", color_map['real+']),
+                    ((1, 1), r"$r^{\mathrm{on}}_{-}$", color_map['real-'])]
+    else:
+        _tab = plt.cm.get_cmap('tab10')
+        diag_map = [((j, j), f'$J_{{{j}}}$', _tab(j % 10)) for j in range(N2)]
+
+    if sym_lim is None:
+        vals = []
+        for (j, k), _, _ in diag_map:
+            v = r_JK_t[:, j, k, :, 0]
+            vals.extend(v[:, 0].real)
+            vals.extend(v[:, 1].real)
+        L = float(np.max(np.abs(vals))) * 1.20
+        sym_lim = (-L, L)
+    elif np.isscalar(sym_lim):
+        sym_lim = (-sym_lim, sym_lim)
+
+    fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=300)
+    ax.set_aspect('equal')
+    ax.axvline(0, color='black', linewidth=0.6, alpha=0.4)
+    ax.axhline(0, color='black', linewidth=0.6, alpha=0.4)
+    ax.set_xlabel(r'Position, $x$', fontsize=12)
+    ax.set_ylabel(r'Momentum, $p$', fontsize=12)
+    ax.set_xlim(sym_lim)
+    ax.set_ylim(sym_lim)
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.5)
+
+    legend_added = set()
+
+    for i, (t_idx, alpha) in enumerate(zip(t_idx_array, alpha_array)):
+        for (j, k), label, color in diag_map:
+            vec = r_JK_t[t_idx, j, k, :, 0]
+            cx  = float(vec[0].real)
+            cy  = float(vec[1].real)
+            sig_real = np.real(sigma_JK_t[t_idx, j, k])
+
+            # Arrow from origin to (cx, cy)
+            ax.quiver(0., 0., cx, cy, color=color, alpha=alpha,
+                      angles='xy', scale_units='xy', scale=1,
+                      headwidth=4, headlength=5, headaxislength=4.5,
+                      width=0.005, zorder=5)
+
+            # 2-D uncertainty ellipse via full covariance eigendecomposition
+            eig_vals, eig_vecs = np.linalg.eigh(sig_real)
+            eig_vals = np.maximum(eig_vals, 0.0)
+            angle = np.degrees(np.arctan2(eig_vecs[1, 0], eig_vecs[0, 0]))
+            ellipse = Ellipse(xy=(cx, cy),
+                              width=2.0 * np.sqrt(eig_vals[0]),
+                              height=2.0 * np.sqrt(eig_vals[1]),
+                              angle=angle,
+                              facecolor=color, alpha=0.15 * alpha,
+                              edgecolor=color, linewidth=0.8,
+                              linestyle='-', zorder=4)
+            ax.add_patch(ellipse)
+
+            if label not in legend_added:
+                ax.plot([], [], color=color, linewidth=1.5, label=label)
+                legend_added.add(label)
+
+    ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
+    if title:
+        ax.set_title(title, fontsize=13)
+    fig.tight_layout()
+    return fig, ax
+
+
+def Plot_Phase_Space_Summary(r_JK_t, sigma_JK_t, t_idx_array, alpha_array,
+                              color_map=None,
+                              sym_lim_2d=None, sym_lim_3d=None,
+                              title="",
+                              figsize=(18, 6), elev=22, azim=-55):
+    """Three-panel static phase-space figure.
+
+    Panel 1 — 2-D Re[x]–Re[p]: on-diagonal arrows + ellipses (same as
+               Plot_Diagonal_Multi_Time_2D).
+    Panel 2 — 3-D with Im[x] on z-axis: all branches, vectors + ellipsoids.
+    Panel 3 — 3-D with Im[p] on z-axis: same, different z component.
+
+    Color is fixed per branch across all panels; alpha encodes time.
+
+    Parameters
+    ----------
+    r_JK_t      : ndarray (T, N2, N2, 2, 1) — first moments (after Select_Mode)
+    sigma_JK_t  : ndarray (T, N2, N2, 2, 2) — covariance matrices
+    t_idx_array : sequence of int — time indices to render
+    alpha_array : sequence of float — opacity per time step
+    color_map   : dict role->colour (None = defaults)
+    sym_lim_2d  : (lo, hi) or float — axis limits for panel 1 (auto if None)
+    sym_lim_3d  : (lo, hi) — axis limits for panels 2–3 (auto if None)
+    title       : overall figure suptitle (omitted if empty)
+    figsize     : figure size tuple
+    elev, azim  : 3-D view angles
+
+    Returns
+    -------
+    fig, (ax1, ax2, ax3)
+    """
+    rcParams['mathtext.fontset'] = 'cm'
+    rcParams['font.family'] = 'STIXGeneral'
+
+    if color_map is None:
+        color_map = _DEFAULT_COLOR_MAP_3D
+
+    # ── diagonal branch map (color + label) ───────────────────────────────────
+    N2 = r_JK_t.shape[1]
+    if N2 == 2:
+        diag_map = [((0, 0), r"$r^{\mathrm{on}}_{+}$", color_map['real+']),
+                    ((1, 1), r"$r^{\mathrm{on}}_{-}$", color_map['real-'])]
+    else:
+        _tab = plt.cm.get_cmap('tab10')
+        diag_map = [((j, j), f'$J_{{{j}}}$', _tab(j % 10)) for j in range(N2)]
+
+    # ── auto limits ───────────────────────────────────────────────────────────
+    if sym_lim_2d is None:
+        vals = []
+        for (j, k), _, _ in diag_map:
+            v = r_JK_t[:, j, k, :, 0]
+            vals.extend(v[:, 0].real)
+            vals.extend(v[:, 1].real)
+        L2 = float(np.max(np.abs(vals))) * 1.20
+        sym_lim_2d = (-L2, L2)
+    elif np.isscalar(sym_lim_2d):
+        sym_lim_2d = (-sym_lim_2d, sym_lim_2d)
+
+    if sym_lim_3d is None:
+        sym_lim_3d = Sym_Lim_From_Data(r_JK_t, sigma_JK_t)
+
+    # ── figure ────────────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=figsize)
+    ax1 = fig.add_subplot(1, 3, 1)
+    ax2 = fig.add_subplot(1, 3, 2, projection='3d')
+    ax3 = fig.add_subplot(1, 3, 3, projection='3d')
+    ax2.view_init(elev=elev, azim=azim)
+    ax3.view_init(elev=elev, azim=azim)
+
+    # ── Panel 1: 2-D Re[x]–Re[p] ─────────────────────────────────────────────
+    ax1.set_aspect('equal')
+    ax1.axvline(0, color='black', linewidth=0.6, alpha=0.4)
+    ax1.axhline(0, color='black', linewidth=0.6, alpha=0.4)
+    ax1.set_xlabel(r'$\mathrm{Re}[x]$', fontsize=12)
+    ax1.set_ylabel(r'$\mathrm{Re}[p]$', fontsize=12)
+    ax1.set_xlim(sym_lim_2d)
+    ax1.set_ylim(sym_lim_2d)
+    for spine in ax1.spines.values():
+        spine.set_linewidth(0.5)
+    ax1.set_title(r'$\mathrm{Re}[x]$–$\mathrm{Re}[p]$', fontsize=13)
+
+    legend_added = set()
+    for t_idx, alpha in zip(t_idx_array, alpha_array):
+        for (j, k), label, color in diag_map:
+            vec      = r_JK_t[t_idx, j, k, :, 0]
+            cx, cy   = float(vec[0].real), float(vec[1].real)
+            sig_real = np.real(sigma_JK_t[t_idx, j, k])
+
+            ax1.quiver(0., 0., cx, cy, color=color, alpha=alpha,
+                       angles='xy', scale_units='xy', scale=1,
+                       headwidth=4, headlength=5, headaxislength=4.5,
+                       width=0.005, zorder=5)
+
+            eig_vals, eig_vecs = np.linalg.eigh(sig_real)
+            eig_vals = np.maximum(eig_vals, 0.0)
+            angle    = np.degrees(np.arctan2(eig_vecs[1, 0], eig_vecs[0, 0]))
+            ax1.add_patch(Ellipse(xy=(cx, cy),
+                                  width=2.0 * np.sqrt(eig_vals[0]),
+                                  height=2.0 * np.sqrt(eig_vals[1]),
+                                  angle=angle,
+                                  facecolor=color, alpha=0.15 * alpha,
+                                  edgecolor=color, linewidth=0.8,
+                                  linestyle='-', zorder=4))
+
+            if label not in legend_added:
+                ax1.plot([], [], color=color, linewidth=1.5, label=label)
+                legend_added.add(label)
+
+    ax1.legend(loc='upper right', fontsize=10, framealpha=0.7)
+
+    # ── Panels 2–3: 3-D ───────────────────────────────────────────────────────
+    for ax_3d, z_comp in [(ax2, 0), (ax3, 1)]:
+        Draw_XY_Plane(ax_3d, sym_lim_3d)
+        for i, (t_idx, alpha) in enumerate(zip(t_idx_array, alpha_array)):
+            Draw_Vectors(ax_3d, r_JK_t, t_idx, z_comp,
+                         color_map=color_map, alpha=alpha, add_legend_entry=False)
+            Draw_Ellipsoids(ax_3d, r_JK_t, sigma_JK_t, t_idx, z_comp,
+                            color_map=color_map, alpha=alpha)
+
+        zlabel = r"$\mathrm{Im}[x]$" if z_comp == 0 else r"$\mathrm{Im}[p]$"
+        _setup_axes_decoration_3d(ax_3d, sym_lim_3d,
+                                   xlabel=r"$\mathrm{Re}[x]$",
+                                   ylabel=r"$\mathrm{Re}[p]$",
+                                   zlabel=zlabel)
+        ax_3d.set_title(zlabel, fontsize=13, y=0.85)
+
+    if title:
+        fig.suptitle(title, fontsize=14)
+
+    fig.subplots_adjust(wspace=0.05)
+    return fig, (ax1, ax2, ax3)

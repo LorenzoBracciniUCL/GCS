@@ -23,6 +23,7 @@ import Symplectic_Known as Symplectic_Known
 import Measurements as Measurements
 import Plots_Functions as Plots_Functions
 import Wigner_Functions as Wigner_Functions
+import Operations as Operations
 
 
 class Hamiltonian:
@@ -128,19 +129,21 @@ class Symplectic:
 
 class Decoherence:
 
-    def __init__(self, N_qubits, n_modes, basis, B_matrix):
+    def __init__(self, N_qubits, n_modes, basis, B_matrix, d_vec=None, Gamma_z=None):
 
         # Parameters for Initiation
         self.N_qubits = N_qubits
         self.n_modes = n_modes
+        self.d_vec = d_vec if d_vec is not None else np.zeros((2*n_modes, 1))
+        self.Gamma_z = Gamma_z if Gamma_z is not None else np.zeros(N_qubits)
 
         if basis == 'Canonical':
             self.E_mat, self.D_mat = Gaussian.Get_Decoherence_Rates(n_modes, B_matrix)
 
         elif basis == 'Ladder':
-            U_N = Gaussian.U_N(n_modes) 
+            U_N = Gaussian.U_N(n_modes)
             self.E_mat, self.D_mat = Gaussian.Get_Decoherence_Rates(n_modes,  U_N.T@B_matrix@U_N)
-        
+
         else:
             print('Input Valid Basis NAme: Canonical or Ladder')
 
@@ -354,7 +357,8 @@ class Quantum_State:
 
             elif Hamiltonian.type[1] == 'General':
                 self.sigma_JK_t, self.r_JK_t, self.C_JK_t, self.phi_JK_t = Open_Operator_Gaussian.Dynamics_Numerical(self.N_qubits, self.n_modes, self.r_0, self.sigma_0,
-                                                                                                Hamiltonian.H_array, Hamiltonian.r_array, Hamiltonian.H_q_0_array, self.rho_q_0, E, D, t_array)
+                                                                                                Hamiltonian.H_array, Hamiltonian.r_array, Hamiltonian.H_q_0_array, self.rho_q_0, E, D, t_array,
+                                                                                                d=Decoherence.d_vec, Gamma_z=Decoherence.Gamma_z)
                 self.r_JK_0_t =  - self.C_JK_t + 1j*self.phi_JK_t
                 self.rho_q_t =  np.exp(- self.C_JK_t + 1j*self.phi_JK_t)*self.rho_q_0
                 self.type = 'GCS'
@@ -414,7 +418,42 @@ class Quantum_State:
 
         return
 
-################################## Measuraments ################################## 
+################################## Operations ##################################
+
+    def _current_gcs_snapshot(self):
+        """Return (sigma, r, rho_q) for the latest GCS snapshot (after dynamics if run)."""
+        if (hasattr(self, 'sigma_JK_t')
+                and self.sigma_JK_t is not None
+                and not np.isscalar(self.sigma_JK_t)):
+            return self.sigma_JK_t[-1], self.r_JK_t[-1], self.rho_q_t[-1]
+        return self.sigma_0, self.r_0, self.rho_q_0
+
+    def Apply_Conditional_Displacement(self, r_array):
+        """
+        Apply a conditional displacement to the current GCS state and re-initialise.
+
+        r_array : (2^N, 2n, 1) — displacement vector r_j for each branch J.
+        """
+        sigma_JK, r_JK, rho_q = self._current_gcs_snapshot()
+        sigma_new, r_new, delta_C, delta_phi = Operations.Conditional_Displacement(
+            self.N_qubits, self.n_modes, sigma_JK, r_JK, r_array)
+        rho_q_new = np.exp(-delta_C + 1j*delta_phi) * rho_q
+        self.Initialize_GCS(sigma_new, r_new, rho_q_new)
+
+    def Apply_Gaussian_Operation(self, X, Y, r_c):
+        """
+        Apply a Gaussian operation (X, Y, r_c) to the current GCS state and re-initialise.
+
+        X, Y : (2n, 2n)
+        r_c  : (2n, 1)
+        """
+        sigma_JK, r_JK, rho_q = self._current_gcs_snapshot()
+        sigma_new, r_new, delta_C, delta_phi = Operations.Gaussian_Operation(
+            self.N_qubits, self.n_modes, sigma_JK, r_JK, X, Y, r_c)
+        rho_q_new = np.exp(-delta_C + 1j*delta_phi) * rho_q
+        self.Initialize_GCS(sigma_new, r_new, rho_q_new)
+
+################################## Measuraments ##################################
 
     def Qubit_Expectation_Values(self, operator,type_exp):
         if type_exp == 'Final':
@@ -491,8 +530,8 @@ class Quantum_State:
     
 ################################## Plot ################################## 
 
-    def Plot_Phase_Space_First_QRDM(self, leged_lables, array_pi,save):
-        Plots_Functions.Plot_Phase_Space_First_QRDM_Func(self, leged_lables, array_pi ,save)
+    def Plot_Phase_Space_First_QRDM(self, leged_lables, array_pi, save, mode=0):
+        Plots_Functions.Plot_Phase_Space_First_QRDM_Func(self, leged_lables, array_pi, save, mode=mode)
 
     def Plot_Wigner_Function_Diag(self, steps, time_index, mode_number, sigma_para, array_tick, title, save):
             
@@ -529,49 +568,83 @@ class Quantum_State:
         fig = Plots_Functions.Plot_Wigner_Diag(self.wigner_gauss,  x_array, p_array, bar_limits, array_tick,title, save)
         return
 
-    def Plot_Trajectories_Single(self, z_comp=0, title="Dynamics of the first moments",
+    def Plot_Trajectories_Single(self, mode=0, z_comp=0,
+                                 title="Dynamics of the first moments",
                                  legend_handles=None, color_map=None, sym_lim=None,
                                  figsize=(10, 10), elev=22, azim=-55):
+        r_m, _ = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
         return Plots_Functions.Plot_Trajectories_Single(
-            self.r_JK_t, z_comp=z_comp, title=title,
+            r_m, z_comp=z_comp, title=title,
             legend_handles=legend_handles, color_map=color_map,
             sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
 
-    def Plot_Vectors_Single(self, t_idx, z_comp=0, title="First moments",
+    def Plot_Vectors_Single(self, t_idx, mode=0, z_comp=0, title="First moments",
                             legend_handles=None, color_map=None, sym_lim=None,
                             figsize=(10, 10), elev=22, azim=-55):
+        r_m, _ = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
         return Plots_Functions.Plot_Vectors_Single(
-            self.r_JK_t, t_idx, z_comp=z_comp, title=title,
+            r_m, t_idx, z_comp=z_comp, title=title,
             legend_handles=legend_handles, color_map=color_map,
             sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
 
-    def Plot_Vectors_Ellipsoids_Single(self, t_idx, z_comp=0,
+    def Plot_Vectors_Ellipsoids_Single(self, t_idx, mode=0, z_comp=0,
                                        title="First moments with uncertainty",
                                        legend_handles=None, color_map=None, sym_lim=None,
                                        figsize=(10, 10), elev=22, azim=-55):
+        r_m, s_m = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
         return Plots_Functions.Plot_Vectors_Ellipsoids_Single(
-            self.r_JK_t, self.sigma_JK_t, t_idx, z_comp=z_comp, title=title,
+            r_m, s_m, t_idx, z_comp=z_comp, title=title,
             legend_handles=legend_handles, color_map=color_map,
             sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
 
-    def Animate_Vectors_Single(self, z_comp=0,
+    def Animate_Vectors_Single(self, mode=0, z_comp=0,
                                title="First moments",
                                legend_handles=None, color_map=None, sym_lim=None,
                                figsize=(10, 10), elev=22, azim=-55,
                                n_frames=None, interval=50, save=False):
+        r_m, _ = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
         return Plots_Functions.Animate_Vectors_Single(
-            self.r_JK_t, z_comp=z_comp, title=title,
+            r_m, z_comp=z_comp, title=title,
             legend_handles=legend_handles, color_map=color_map,
             sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim,
             n_frames=n_frames, interval=interval, save=save)
 
-    def Animate_Vectors_Ellipsoids_Single(self, z_comp=0,
+    def Plot_Diagonal_Multi_Time_2D(self, t_idx_array, alpha_array, mode=0,
+                                    color_map=None, sym_lim=None,
+                                    title="On-diagonal first moments",
+                                    figsize=(6, 6)):
+        r_m, s_m = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
+        return Plots_Functions.Plot_Diagonal_Multi_Time_2D(
+            r_m, s_m, t_idx_array, alpha_array,
+            color_map=color_map, sym_lim=sym_lim, title=title, figsize=figsize)
+
+    def Plot_Phase_Space_Summary(self, t_idx_array, alpha_array, mode=0,
+                                 color_map=None, sym_lim_2d=None, sym_lim_3d=None,
+                                 title="", figsize=(18, 6), elev=22, azim=-55):
+        r_m, s_m = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
+        return Plots_Functions.Plot_Phase_Space_Summary(
+            r_m, s_m, t_idx_array, alpha_array,
+            color_map=color_map, sym_lim_2d=sym_lim_2d, sym_lim_3d=sym_lim_3d,
+            title=title, figsize=figsize, elev=elev, azim=azim)
+
+    def Plot_Vectors_Ellipsoids_Multi_Time(self, t_idx_array, alpha_array, mode=0, z_comp=0,
+                                           title="First moments with uncertainty",
+                                           legend_handles=None, color_map=None, sym_lim=None,
+                                           figsize=(10, 10), elev=22, azim=-55):
+        r_m, s_m = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
+        return Plots_Functions.Plot_Vectors_Ellipsoids_Multi_Time(
+            r_m, s_m, t_idx_array, alpha_array, z_comp=z_comp, title=title,
+            legend_handles=legend_handles, color_map=color_map,
+            sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim)
+
+    def Animate_Vectors_Ellipsoids_Single(self, mode=0, z_comp=0,
                                           title="First moments with uncertainty",
                                           legend_handles=None, color_map=None, sym_lim=None,
                                           figsize=(10, 10), elev=22, azim=-55,
                                           n_frames=None, interval=50, save=False):
+        r_m, s_m = Plots_Functions.Select_Mode(mode, self.r_JK_t, self.sigma_JK_t)
         return Plots_Functions.Animate_Vectors_Ellipsoids_Single(
-            self.r_JK_t, self.sigma_JK_t, z_comp=z_comp, title=title,
+            r_m, s_m, z_comp=z_comp, title=title,
             legend_handles=legend_handles, color_map=color_map,
             sym_lim=sym_lim, figsize=figsize, elev=elev, azim=azim,
             n_frames=n_frames, interval=interval, save=save)

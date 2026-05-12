@@ -75,48 +75,55 @@ def equation_dot_r_jk(t, y, sigma_jk_interp, H_j, H_k, r_j, r_k,  E, d, n_modes)
     """
     Defines the ODE for r_jk when r_jk is a 2n x 2n matrix.
     """
-    Omega = Gaussian.Omega_N(n_modes) 
+    Omega = Gaussian.Omega_N(n_modes)
     r_jk = y.reshape((2*n_modes, 1))  # Reshape to 2n x 1 vector
     sigma_jk = sigma_jk_interp(t).reshape(2*n_modes, 2*n_modes)  # Properly reshape interpolated sigma_jk
-    
-    # Compute derivative
-    r_jk_dot = 0.5 * Omega @ (H_j + H_k+ 2*E) @ r_jk - 0.5j * sigma_jk @ (H_j - H_k) @ r_jk - 0.5 * Omega @ (r_j + r_k) + 0.5j * sigma_jk @ (r_j - r_k)
-    
+
+    # Compute derivative (Tab. 3: ½ Ω(2d − r_J − r_K) driving term)
+    r_jk_dot = 0.5 * Omega @ (H_j + H_k + 2*E) @ r_jk - 0.5j * sigma_jk @ (H_j - H_k) @ r_jk + 0.5 * Omega @ (2*d - r_j - r_k) + 0.5j * sigma_jk @ (r_j - r_k)
+
     return  r_jk_dot.flatten()
-    
-def Compute_R_JK_Open_General_Numerical(n_modes,r_0, sigma_JK_sol, H_j, H_k, r_j, r_k,  E,D, t_array):
-    
+
+def Compute_R_JK_Open_General_Numerical(n_modes, r_0, sigma_JK_sol, H_j, H_k, r_j, r_k, E, D, t_array, d=None):
+    if d is None:
+        d = np.zeros_like(r_j)
+
     sigma_JK_interp = interp1d(sigma_JK_sol.t, sigma_JK_sol.y.T, axis=0, kind='cubic', fill_value='extrapolate')
     # Flatten initial conditions
     y0 = r_0.flatten()
-    
+
     # Time span and points
     t_span = (t_array[0], t_array[-1])
-    
+
     # Solve for r_jk
-    sol_r = solve_ivp(equation_dot_r_jk, t_span, y0, t_eval=t_array, args=(sigma_JK_interp, H_j, H_k, r_j, r_k, E,D, n_modes))
-    
+    sol_r = solve_ivp(equation_dot_r_jk, t_span, y0, t_eval=t_array, args=(sigma_JK_interp, H_j, H_k, r_j, r_k, E, d, n_modes))
+
     # Extract solutioon
     r_jk_sol = sol_r.y.T.reshape(-1, 2*n_modes, 1)  # Reshape back to vectors
-   
+
     return r_jk_sol, sol_r
 
-def equation_dot_r_jk_0(t, y, sigma_JK_interp,r_JK_interp, H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array,  n_modes):
+def equation_dot_r_jk_0(t, y, sigma_JK_interp, r_JK_interp, H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array, Gamma_z, n_modes):
     """
     Defines the ODE for r_0_jk when r_0_jk can be complex.
     """
     r_jk = r_JK_interp(t).reshape(2*n_modes, 1)  # Interpolated r_jk
     sigma_jk = sigma_JK_interp(t).reshape(2*n_modes, 2*n_modes)  # Interpolated sigma_jk
-    
+
+    # Γ_z dephasing: real term Σ_i Γ_{z,i} (J_i K_i − 1) / 2 (Tab. 3)
+    dephasing = 0.5 * np.real(np.sum(Gamma_z * (J_labels * K_labels - 1)))
+
     # Compute derivative
-    r_0_jk_dot =  1j *( - 0.5 * r_jk.T @ (H_j - H_k ) @ r_jk + (r_j - r_k).T @ r_jk
-                - 0.25 * np.trace((H_j - H_k) @ sigma_jk) - 0.5 * np.transpose(J_labels- K_labels)@H_q_0_array)
-    
-    return r_0_jk_dot[0,0]
+    r_0_jk_dot = 1j * (- 0.5 * r_jk.T @ (H_j - H_k) @ r_jk + (r_j - r_k).T @ r_jk
+                - 0.25 * np.trace((H_j - H_k) @ sigma_jk) - 0.5 * np.transpose(J_labels - K_labels) @ H_q_0_array)
+
+    return r_0_jk_dot[0, 0] + dephasing
 
 
-def Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol,  H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array, rho_q_0_JK, t_array):
-    
+def Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol, H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array, rho_q_0_JK, t_array, Gamma_z=None):
+    if Gamma_z is None:
+        Gamma_z = np.zeros(len(J_labels))
+
     r_JK_interp = interp1d(r_JK_sol.t, r_JK_sol.y.T, axis=0, kind='cubic', fill_value='extrapolate')
     sigma_JK_interp = interp1d(sigma_JK_sol.t, sigma_JK_sol.y.T, axis=0, kind='cubic', fill_value='extrapolate')
     # Flatten initial conditions
@@ -124,24 +131,30 @@ def Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol,  H_j,
 
     # Time span and points
     t_span = (t_array[0], t_array[-1])
-    
-    # Solve for r_jk
-    sol_r_0 = solve_ivp(equation_dot_r_jk_0, t_span, y0, t_eval=t_array, 
-                        args=(sigma_JK_interp,r_JK_interp, H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array,  n_modes))
-    # Extract solutioon
-    r_0_jk_sol = sol_r_0.y.T # Reshape back to vectors
-      
-    return r_0_jk_sol[:,0]
 
-def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_array, r_ham_array, H_q_0_array, rho_q_0, E, D, t_array):
+    # Solve for r_jk
+    sol_r_0 = solve_ivp(equation_dot_r_jk_0, t_span, y0, t_eval=t_array,
+                        args=(sigma_JK_interp, r_JK_interp, H_j, H_k, r_j, r_k, J_labels, K_labels, H_q_0_array, Gamma_z, n_modes))
+    # Extract solutioon
+    r_0_jk_sol = sol_r_0.y.T  # Reshape back to vectors
+
+    return r_0_jk_sol[:, 0]
+
+def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_array, r_ham_array, H_q_0_array, rho_q_0, E, D, t_array, d=None, Gamma_z=None):
     """
     r_0     : (2n, 1)                   — single IC for all branches, OR
               (2^N, 2^N, 2n, 1)         — per-branch IC
     sigma_0 : (2n, 2n)                  — single IC for all branches, OR
               (2^N, 2^N, 2n, 2n)        — per-branch IC
     rho_q_0 : (2^N, 2^N)               — per-branch initial QRDM elements
+    d       : (2n, 1) Lindblad linear driving vector (default zeros)
+    Gamma_z : (N,) qubit dephasing rates (default zeros)
     """
     N2 = 2**N_qubits
+    if d is None:
+        d = np.zeros((2*n_modes, 1))
+    if Gamma_z is None:
+        Gamma_z = np.zeros(N_qubits)
 
     # Detect per-branch vs single initial conditions and build (N2, N2, ...) views
     if sigma_0.ndim == 4:
@@ -170,8 +183,8 @@ def Dynamics_Numerical(N_qubits, n_modes, r_0, sigma_0, H_array, r_ham_array, H_
 
             # Compute quantities
             sigma_JK_t[:,j,k], sigma_JK_sol = Compute_sigma_JK_Open_General_Numerical(n_modes, sigma_0_jk[j,k], H_J, H_K,  E, D, t_array)
-            r_JK_t[:,j,k], r_JK_sol = Compute_R_JK_Open_General_Numerical(n_modes, r_0_jk[j,k], sigma_JK_sol, H_J, H_K, r_J, r_K,  E, D, t_array)
-            r_JK_0_t[:,j,k] = Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol,  H_J, H_K, r_J, r_K, J_labels, K_labels, H_q_0_array,rho_q_0[j,k], t_array)
+            r_JK_t[:,j,k], r_JK_sol = Compute_R_JK_Open_General_Numerical(n_modes, r_0_jk[j,k], sigma_JK_sol, H_J, H_K, r_J, r_K, E, D, t_array, d=d)
+            r_JK_0_t[:,j,k] = Compute_R_JK_0_Open_General_Numerical(n_modes, r_JK_sol, sigma_JK_sol, H_J, H_K, r_J, r_K, J_labels, K_labels, H_q_0_array, rho_q_0[j,k], t_array, Gamma_z=Gamma_z)
             C_JK_t[:,j,k] =  - np.real(r_JK_0_t[:,j,k] - np.log(rho_q_0[j,k]))
             phi_JK_t[:,j,k] = np.imag(r_JK_0_t[:,j,k] - np.log(rho_q_0[j,k]))
 
